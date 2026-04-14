@@ -11,11 +11,12 @@ public class process {
 
     public boolean finished= false;
 
-    public process(int burst, int priority, String Name )
+    public process(int burst, int priority, String Name ,int arrivaltime)
     {
         this.burst = burst;
         this.priority = priority;
         this.processName = Name;
+        this.arrivaltime = arrivaltime;
 
     }
     public double getTAT (){return (double)finishtime-arrivaltime;}

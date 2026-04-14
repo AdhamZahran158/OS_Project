@@ -1,5 +1,6 @@
 package com.mycompany.os.project;
 
+import com.mycompany.os.project.src.Timeline;
 import com.mycompany.os.project.src.process;
 import java.util.ArrayList;
 import javafx.application.Application;
@@ -40,12 +41,18 @@ public class App extends Application {
         burstOfProcess.setValueFactory(
                 new SpinnerValueFactory.IntegerSpinnerValueFactory(1,1000,1)
         );
-        
+
+        var arrivalTimeLabel = new Label("Choose Arrival Time");
+        Spinner<Integer> arrivalTime = new Spinner<>();
+        arrivalTime.setValueFactory(
+                new SpinnerValueFactory.IntegerSpinnerValueFactory(0,1000,0)
+        );
+
         var priorityLabel = new Label("Choose Priority Of Process");
         priorityLabel.setDisable(true);
         Spinner<Integer> priority = new Spinner<>();
         priority.setValueFactory(
-        new SpinnerValueFactory.IntegerSpinnerValueFactory(1,1000, -1)
+        new SpinnerValueFactory.IntegerSpinnerValueFactory(1,1000,1)
         );
         priority.setDisable(true);
         choices.valueProperty().addListener((obs, oldValue, newValue) -> {
@@ -110,12 +117,76 @@ public class App extends Application {
                 {
                     break;
                 }
-                case "Priority [Non-Preemptive]":
-                {
+                case "Priority [Non-Preemptive]": {
+                    Timeline timeline = new Timeline();
+                    int time = 0;
+                    int completed = 0;
+
+                    while (completed < processes.size()) {
+                        ArrayList<process> available = new ArrayList<>();
+                        for (process p : processes) {
+                            if (p.arrivaltime <= time && !p.finished) {
+                                available.add(p);
+                            }
+                        }
+
+                        if (available.isEmpty()) {
+                            timeline.addSlot("IDLE", time, time + 1);
+                            time++;
+                            continue;
+                        }
+
+                        available.sort((p1, p2) -> Integer.compare(p1.priority, p2.priority));
+
+                        process current = available.get(0);
+                        current.finishtime = time + current.burst;
+                        timeline.addSlot(current.processName, time, current.finishtime);
+                        time = current.finishtime;
+                        current.finished = true;
+                        completed++;
+                    }
                     break;
                 }
                 case "Priority [Preemptive]":
                 {
+                    Timeline timeline = new Timeline();
+                    int time = 0;
+                    int completed = 0;
+
+                    int[] remaining = new int[processes.size()];
+                    for (int i = 0; i < processes.size(); i++) {
+                        remaining[i] = processes.get(i).burst;
+                    }
+
+                    while (completed < processes.size()) {
+                        ArrayList<process> available = new ArrayList<>();
+                        for (process p : processes) {
+                            if (p.arrivaltime <= time && !p.finished) {
+                                available.add(p);
+                            }
+                        }
+
+                        if (available.isEmpty()) {
+                            timeline.addSlot("IDLE", time, time + 1);
+                            time++;
+                            continue;
+                        }
+
+                        available.sort((p1, p2) -> Integer.compare(p1.priority, p2.priority));
+
+                        process current = available.get(0);
+                        int currentIndex = processes.indexOf(current);
+                        timeline.addSlot(current.processName, time, time + 1);
+                        remaining[currentIndex]--;
+                        time++;
+
+                        if (remaining[currentIndex] == 0) {
+                            current.finishtime = time;
+                            current.finished = true;
+                            completed++;
+                        }
+                    }
+                    timeline.mergeConsecutive();
                     break;
                 }
                 case "Round Robbin":
