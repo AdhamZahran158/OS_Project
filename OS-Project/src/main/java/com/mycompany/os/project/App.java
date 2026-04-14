@@ -60,15 +60,31 @@ public class App extends Application {
         new SpinnerValueFactory.IntegerSpinnerValueFactory(1,1000)
         );
         priority.setDisable(true);
+        
+        var quantumLabel = new Label("Choose Quantum Time");
+        quantumLabel.setDisable(true);
+        Spinner<Integer> quantumBox = new Spinner<>();
+        quantumBox.setValueFactory(
+        new SpinnerValueFactory.IntegerSpinnerValueFactory(1,1000)
+        );
+        quantumBox.setDisable(true);
+        
         choices.valueProperty().addListener((obs, oldValue, newValue) -> {
             if (newValue == null) return;
 
             if ("Priority [Preemptive]".equals(newValue) || "Priority [Non-Preemptive]".equals(newValue)) {
                 priority.setDisable(false);
                 priorityLabel.setDisable(false);
-            } else {
+            }
+            else if("Round Robbin".equals(newValue))
+            {
+                quantumBox.setDisable(false);
+                quantumLabel.setDisable(false);
+            }
+            else {
                 priority.setDisable(true);
                 priorityLabel.setDisable(true);
+                quantumBox.setDisable(true);
             }
         });
        
@@ -220,7 +236,7 @@ public class App extends Application {
                 }
                 case "Round Robbin":
                 {
-                    int quantum = 2;
+                    int quantum = quantumBox.getValue();
                     timeline.play();
                     new Thread(() -> {
                         double initSize = (double) processes.size();
