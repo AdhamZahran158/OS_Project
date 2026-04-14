@@ -220,6 +220,75 @@ public class App extends Application {
                 }
                 case "Round Robbin":
                 {
+                    int quantum = 2;
+                    timeline.play();
+                    new Thread(() -> {
+                        double initSize = (double) processes.size();
+                        while (!processes.isEmpty()) {
+                            var p = processes.get(0);
+                            int executeTime = Math.min(p.burst, quantum);
+                            Platform.runLater(() -> execLabel.setText("Executing " + p.processName + " ..."));
+
+                            final double progress = (initSize - ((double) processes.size()) + 1) / initSize;
+                            Platform.runLater(() -> bar.setProgress(progress));
+
+                            int startTime = currentTime[0];
+
+                            Platform.runLater(() -> {
+                                Region block = new Region();
+
+                                block.setPrefHeight(30);
+                                block.setPrefWidth(executeTime * 25);
+
+                                block.setStyle(
+                                        "-fx-background-color: " + p.color + ";" +
+                                                "-fx-border-color: black;" +
+                                                "-fx-background-radius: 5;"
+                                );
+
+                                Label label = new Label(p.processName);
+                                label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+
+                                StackPane cell = new StackPane();
+                                cell.getChildren().addAll(block, label);
+
+                                ganttChart.getChildren().add(cell);
+                            });
+
+                            currentTime[0] += executeTime;
+
+                            Platform.runLater(() -> {
+                                Label timeLabel = new Label(String.valueOf(startTime));
+                                timeLabel.setMinWidth(executeTime * 25);
+                                timeLabel.setStyle("-fx-font-size: 10px;");
+                                timeAxis.getChildren().add(timeLabel);
+                            });
+
+                            try {
+                                Thread.sleep(executeTime * 1000);
+                            } catch (InterruptedException ex) {
+                                ex.printStackTrace();
+                            }
+                            p.burst -= executeTime;
+                            processes.remove(0);
+                            if (p.burst > 0) {
+                                processes.add(p);
+                            }
+                        }
+                        Platform.runLater(() -> {
+                            execLabel.setText("Done!");
+                        });
+
+                        Platform.runLater(() -> {
+                            Label end = new Label(String.valueOf(currentTime[0]));
+                            end.setStyle("-fx-font-size: 10px;");
+                            timeAxis.getChildren().add(end);
+                        });
+
+                        seconds[0] = 0;
+                        timeline.stop();
+
+                    }).start();
                     break;
                 }
             }
