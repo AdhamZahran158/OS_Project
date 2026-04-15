@@ -11,6 +11,8 @@ public class process {
     public int startTime = -1;
     public int finishTime;
     public int originalBurst;
+
+    public boolean finished = false ;
     
     public process(int burst, int priority, String Name, int arrTime)
     {

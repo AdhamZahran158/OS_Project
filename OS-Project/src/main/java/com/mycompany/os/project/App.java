@@ -440,10 +440,296 @@ public class App extends Application {
                 }
                 case "Priority [Non-Preemptive]":
                 {
+                    timeline.play();
+                    new Thread(() -> {
+                        double initSize = (double) processes.size();
+                        int totalWT = 0;
+                        int totalTAT = 0;
+                        int count = 0;
+
+                        while (count < (int) initSize) {
+                            while (isPaused) {
+                                try { Thread.sleep(100); } catch (Exception e) {}
+                            }
+
+                            ArrayList<process> available = new ArrayList<>();
+                            for (process p : processes) {
+                                if (p.arrivalTime <= currentTime[0] && !p.finished) {
+                                    available.add(p);
+                                }
+                            }
+
+                            if (available.isEmpty()) {
+
+                                int idleStart = currentTime[0];
+                                Platform.runLater(() -> {
+                                    Region block = new Region();
+                                    block.setPrefHeight(30);
+                                    block.setPrefWidth(1 * 25);
+                                    block.setStyle("-fx-background-color: #888888;" +
+                                            "-fx-border-color: black;-fx-background-radius: 5;");
+                                    Label label = new Label("IDLE");
+                                    label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+                                    StackPane cell = new StackPane();
+                                    cell.getChildren().addAll(block, label);
+                                    ganttChart.getChildren().add(cell);
+
+                                    Label timeLabel = new Label(String.valueOf(idleStart));
+                                    timeLabel.setMinWidth(1 * 25);
+                                    timeLabel.setStyle("-fx-font-size: 10px;");
+                                    timeAxis.getChildren().add(timeLabel);
+                                });
+
+                                try { Thread.sleep(1000); } catch (InterruptedException ex) { ex.printStackTrace(); }
+                                currentTime[0]++;
+                                continue;
+                            }
+
+                            available.sort((p1, p2) -> Integer.compare(p1.priority, p2.priority));
+                            process current = available.get(0);
+                            int burstTime = current.burst;
+
+                            Platform.runLater(() -> execLabel.setText("Executing " + current.processName + " ..."));
+
+                            final double progress = (double) count / initSize;
+                            Platform.runLater(() -> bar.setProgress(progress));
+
+                            int startTime = currentTime[0];
+
+
+                            Platform.runLater(() -> {
+                                Region block = new Region();
+                                block.setPrefHeight(30);
+                                block.setPrefWidth(burstTime * 25);
+                                block.setStyle("-fx-background-color: " + current.color + ";" +
+                                        "-fx-border-color: black;-fx-background-radius: 5;");
+                                Label label = new Label(current.processName);
+                                label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+                                StackPane cell = new StackPane();
+                                cell.getChildren().addAll(block, label);
+                                ganttChart.getChildren().add(cell);
+                            });
+
+
+                            Platform.runLater(() -> {
+                                Label timeLabel = new Label(String.valueOf(startTime));
+                                timeLabel.setMinWidth(burstTime * 25);
+                                timeLabel.setStyle("-fx-font-size: 10px;");
+                                timeAxis.getChildren().add(timeLabel);
+                            });
+
+
+                            for (int i = 0; i < burstTime; i++) {
+                                while (isPaused) {
+                                    try { Thread.sleep(100); } catch (Exception e) {}
+                                }
+                                try { Thread.sleep(1000); } catch (InterruptedException ex) { ex.printStackTrace(); }
+                                current.burst--;
+                                Platform.runLater(() -> processesTable.refresh());
+                            }
+
+                            current.finishTime = currentTime[0] + burstTime;
+                            currentTime[0] = current.finishTime;
+                            current.finished = true;
+
+                            int wt = current.getWaitingTime();
+                            int tat = current.getTurnaroundTime();
+                            totalWT += wt;
+                            totalTAT += tat;
+                            count++;
+                        }
+
+                        final double avgWT = totalWT / (double) count;
+                        final double avgTAT = totalTAT / (double) count;
+                        Platform.runLater(() -> {
+                            execLabel.setText("Done!");
+                            metricsLabel.setText("Average Waiting Time: " + avgWT +
+                                    "\nAverage Turnaround Time: " + avgTAT);
+                            Label end = new Label(String.valueOf(currentTime[0]));
+                            end.setStyle("-fx-font-size: 10px;");
+                            timeAxis.getChildren().add(end);
+                        });
+
+                        seconds[0] = 0;
+                        timeline.stop();
+                    }).start();
                     break;
                 }
+
                 case "Priority [Preemptive]":
                 {
+                    timeline.play();
+                    new Thread(() -> {
+                        double initSize = (double) processes.size();
+                        int totalWT = 0;
+                        int totalTAT = 0;
+                        int count = 0;
+
+
+                        int[] remaining = new int[processes.size()];
+                        for (int i = 0; i < processes.size(); i++) {
+                            remaining[i] = processes.get(i).burst;
+                        }
+
+                        process lastProcess = null;
+                        int blockStart = 0;
+                        int blockDuration = 0;
+
+                        while (count < (int) initSize) {
+                            while (isPaused) {
+                                try { Thread.sleep(100); } catch (Exception e) {}
+                            }
+
+
+                            ArrayList<process> available = new ArrayList<>();
+                            for (int i = 0; i < processes.size(); i++) {
+                                process p = processes.get(i);
+                                if (p.arrivalTime <= currentTime[0] && !p.finished) {
+                                    available.add(p);
+                                }
+                            }
+
+                            if (available.isEmpty()) {
+                                if (lastProcess != null) {
+                                    final process fp = lastProcess;
+                                    final int fd = blockDuration;
+                                    Platform.runLater(() -> {
+                                        Region block = new Region();
+                                        block.setPrefHeight(30);
+                                        block.setPrefWidth(fd * 25);
+                                        block.setStyle("-fx-background-color: " + fp.color + ";" +
+                                                "-fx-border-color: black;-fx-background-radius: 5;");
+                                        Label label = new Label(fp.processName);
+                                        label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+                                        StackPane cell = new StackPane();
+                                        cell.getChildren().addAll(block, label);
+                                        ganttChart.getChildren().add(cell);
+                                    });
+                                    lastProcess = null;
+                                    blockDuration = 0;
+                                }
+
+
+                                int idleStart = currentTime[0];
+                                Platform.runLater(() -> {
+                                    Region block = new Region();
+                                    block.setPrefHeight(30);
+                                    block.setPrefWidth(1 * 25);
+                                    block.setStyle("-fx-background-color: #888888;" +
+                                            "-fx-border-color: black;-fx-background-radius: 5;");
+                                    Label label = new Label("IDLE");
+                                    label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+                                    StackPane cell = new StackPane();
+                                    cell.getChildren().addAll(block, label);
+                                    ganttChart.getChildren().add(cell);
+
+                                    Label timeLabel = new Label(String.valueOf(idleStart));
+                                    timeLabel.setMinWidth(1 * 25);
+                                    timeLabel.setStyle("-fx-font-size: 10px;");
+                                    timeAxis.getChildren().add(timeLabel);
+                                });
+
+                                try { Thread.sleep(1000); } catch (InterruptedException ex) { ex.printStackTrace(); }
+                                currentTime[0]++;
+                                continue;
+                            }
+
+
+                            available.sort((p1, p2) -> Integer.compare(p1.priority, p2.priority));
+                            process current = available.get(0);
+                            int currentIndex = processes.indexOf(current);
+
+
+                            if (current != lastProcess) {
+                                if (lastProcess != null) {
+                                    final process fp = lastProcess;
+                                    final int fd = blockDuration;
+                                    final int fs = blockStart;
+                                    Platform.runLater(() -> {
+                                        Region block = new Region();
+                                        block.setPrefHeight(30);
+                                        block.setPrefWidth(fd * 25);
+                                        block.setStyle("-fx-background-color: " + fp.color + ";" +
+                                                "-fx-border-color: black;-fx-background-radius: 5;");
+                                        Label label = new Label(fp.processName);
+                                        label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+                                        StackPane cell = new StackPane();
+                                        cell.getChildren().addAll(block, label);
+                                        ganttChart.getChildren().add(cell);
+
+                                        Label timeLabel = new Label(String.valueOf(fs));
+                                        timeLabel.setMinWidth(fd * 25);
+                                        timeLabel.setStyle("-fx-font-size: 10px;");
+                                        timeAxis.getChildren().add(timeLabel);
+                                    });
+                                }
+                                lastProcess = current;
+                                blockStart = currentTime[0];
+                                blockDuration = 0;
+
+                                final process fc = current;
+                                Platform.runLater(() -> execLabel.setText("Executing " + fc.processName + " ..."));
+                                final double progress = (double) count / initSize;
+                                Platform.runLater(() -> bar.setProgress(progress));
+                            }
+
+
+                            try { Thread.sleep(1000); } catch (InterruptedException ex) { ex.printStackTrace(); }
+                            remaining[currentIndex]--;
+                            current.burst = remaining[currentIndex];
+                            blockDuration++;
+                            currentTime[0]++;
+                            Platform.runLater(() -> processesTable.refresh());
+
+                            if (remaining[currentIndex] == 0) {
+                                current.finishTime = currentTime[0];
+                                current.finished = true;
+
+                                final process fp = lastProcess;
+                                final int fd = blockDuration;
+                                final int fs = blockStart;
+                                Platform.runLater(() -> {
+                                    Region block = new Region();
+                                    block.setPrefHeight(30);
+                                    block.setPrefWidth(fd * 25);
+                                    block.setStyle("-fx-background-color: " + fp.color + ";" +
+                                            "-fx-border-color: black;-fx-background-radius: 5;");
+                                    Label label = new Label(fp.processName);
+                                    label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+                                    StackPane cell = new StackPane();
+                                    cell.getChildren().addAll(block, label);
+                                    ganttChart.getChildren().add(cell);
+
+                                    Label timeLabel = new Label(String.valueOf(fs));
+                                    timeLabel.setMinWidth(fd * 25);
+                                    timeLabel.setStyle("-fx-font-size: 10px;");
+                                    timeAxis.getChildren().add(timeLabel);
+                                });
+                                lastProcess = null;
+                                blockDuration = 0;
+
+                                int wt = current.getWaitingTime();
+                                int tat = current.getTurnaroundTime();
+                                totalWT += wt;
+                                totalTAT += tat;
+                                count++;
+                            }
+                        }
+
+                        final double avgWT = totalWT / (double) count;
+                        final double avgTAT = totalTAT / (double) count;
+                        Platform.runLater(() -> {
+                            execLabel.setText("Done!");
+                            metricsLabel.setText("Average Waiting Time: " + avgWT +
+                                    "\nAverage Turnaround Time: " + avgTAT);
+                            Label end = new Label(String.valueOf(currentTime[0]));
+                            end.setStyle("-fx-font-size: 10px;");
+                            timeAxis.getChildren().add(end);
+                        });
+
+                        seconds[0] = 0;
+                        timeline.stop();
+                    }).start();
                     break;
                 }
                 case "Round Robbin": 
