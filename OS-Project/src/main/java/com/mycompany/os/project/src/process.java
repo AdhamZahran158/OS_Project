@@ -8,6 +8,9 @@ public class process {
     public int priority;
     public String color;
     public int arrivalTime = 0;
+    public int startTime = -1;
+    public int finishTime;
+    public int originalBurst;
     
     public process(int burst, int priority, String Name, int arrTime)
     {
@@ -15,6 +18,7 @@ public class process {
         this.priority = priority;
         this.processName = Name;
         this.arrivalTime = arrTime;
+        this.originalBurst = burst;
         
         Random rand = new Random();
 
@@ -23,5 +27,13 @@ public class process {
         int b = 50 + rand.nextInt(206);
 
         color =  String.format("#%02X%02X%02X", r, g, b);
+    }
+    
+    public int getTurnaroundTime() {
+    return finishTime - arrivalTime;
+    }
+    
+    public int getWaitingTime() {
+    return getTurnaroundTime() - originalBurst;
     }
 }
