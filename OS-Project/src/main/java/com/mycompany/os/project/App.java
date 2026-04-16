@@ -42,12 +42,14 @@ import javafx.util.Duration;
 
 public class App extends Application {
     volatile boolean isPaused = false ;
+    volatile boolean dynamicSimulationStarted = false;
     
     @Override
     public void start(Stage stage) {
         var javaVersion = SystemInfo.javaVersion();
         var javafxVersion = SystemInfo.javafxVersion();
         ObservableList<process> processes = FXCollections.observableArrayList();
+        final Object processListLock = new Object();
                                 ///Configuring Process Values\\\
         ComboBox<String> executionType = new ComboBox<>();
         executionType.getItems().addAll("Static Execution", "Dynamic Execution");
@@ -114,11 +116,20 @@ public class App extends Application {
        
                                 ///Timer\\\
         int[] seconds = {0};
+        int[] currentTime = {0};
+                                                        int[] displayedTime = {0};
         Label timerLabel = new Label();
+        timerLabel.setText("Time: 0s");
+                                                        Runnable refreshTimerLabel = () -> Platform.runLater(() -> {
+                                                            displayedTime[0] = currentTime[0];
+                                                            timerLabel.setText("Time: " + displayedTime[0] + "s");
+                                                        });
         Timeline timeline = new Timeline(
             new KeyFrame(Duration.seconds(1), e -> {
-                seconds[0]++;
-                timerLabel.setText("Time: " + seconds[0] + "s");
+                // Keep GUI timer aligned with scheduler clock.
+                                                                seconds[0] = currentTime[0];
+                                                                displayedTime[0] = currentTime[0];
+                                                                timerLabel.setText("Time: " + displayedTime[0] + "s");
             })
         );
         timeline.setCycleCount(Timeline.INDEFINITE);
@@ -127,10 +138,23 @@ public class App extends Application {
         Button addProcess = new Button("Add Process");
         addProcess.setOnAction(e ->
         {
-            if(executionType.getValue() == "Dynamic Execution")
-                processes.add(new process(burstOfProcess.getValue(),priority.getValue(),processName.getText(),seconds[0]));
-            else
-                processes.add(new process(burstOfProcess.getValue(),priority.getValue(),processName.getText(),arrivalTime.getValue()));
+            boolean isDynamicExecution = "Dynamic Execution".equals(executionType.getValue());
+            int processArrivalTime;
+
+            if (isDynamicExecution) {
+                processArrivalTime = dynamicSimulationStarted ? displayedTime[0] : arrivalTime.getValue();
+            } else {
+                processArrivalTime = arrivalTime.getValue();
+            }
+
+            synchronized (processListLock) {
+                processes.add(new process(
+                    burstOfProcess.getValue(),
+                    priority.getValue(),
+                    processName.getText(),
+                    processArrivalTime
+                ));
+            }
 
         });
         
@@ -141,7 +165,6 @@ public class App extends Application {
         HBox timeAxis = new HBox();
         timeAxis.setSpacing(0);
         timeAxis.setPadding(new javafx.geometry.Insets(5, 10, 5, 10));
-        int[] currentTime = {0};
         
         TableView<process> processesTable = new TableView();
         TableColumn<process, String> nameCol = new TableColumn<>("Process Name");
@@ -170,9 +193,22 @@ public class App extends Application {
         var metricsLabel = new Label();
         var execLabel = new Label();
         var bar = new ProgressBar(0);
+        Button stopAdding = new Button("Stop");
+        stopAdding.setDisable(true);
+        stopAdding.setOnAction(eh -> {
+            dynamicSimulationStarted = false;
+            stopAdding.setDisable(true);
+            execLabel.setText("No more new processes");
+        });
         Button startDynamic = new Button("Start Dynamic Execution");
         startDynamic.setOnAction(eh->
         {
+            dynamicSimulationStarted = true;
+            stopAdding.setDisable(false);
+            arrivalTime.setDisable(true);
+            arrTimeLabel.setDisable(true);
+            refreshTimerLabel.run();
+
             switch (choices.getValue())
             {
                 case "FCFS":
@@ -183,19 +219,41 @@ public class App extends Application {
                         int totalTAT = 0;
                         int count = 0;
                         double initSize = ((double)processes.size());
-                        while (!processes.isEmpty()) {
+                        while (true) {
                             while (isPaused) {
                                 try {
                                     Thread.sleep(100);
                                 } catch (InterruptedException e) {}
                             }
-                            
-                            var p = processes.get(0);
+
+                            process p = null;
+                            synchronized (processListLock) {
+                                if (processes.isEmpty()) {
+                                    break;
+                                }
+
+                                for (process candidate : processes) {
+                                    if (candidate.arrivalTime <= currentTime[0]) {
+                                        p = candidate;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (p == null) {
+                                try { Thread.sleep(1000); } catch (InterruptedException ex) {}
+                                currentTime[0]++;
+                                refreshTimerLabel.run();
+                                continue;
+                            }
+
+                            final process running = p;
+                            final int displayBurst = running.burst;
 
                             Platform.runLater(() -> {
-                                execLabel.setText("Executing " + p.processName + " ...");
+                                execLabel.setText("Executing " + running.processName + " ...");
                             });
-                            final double progress = (initSize-((double)processes.size())+1)/initSize;
+                            final double progress = (initSize - ((double) processes.size()) + 1) / initSize;
                             Platform.runLater(() -> {
                                 bar.setProgress(progress);
                             });
@@ -204,15 +262,15 @@ public class App extends Application {
                             Region block = new Region();
 
                             block.setPrefHeight(30);
-                            block.setPrefWidth(p.burst * 25); 
+                            block.setPrefWidth(displayBurst * 25); 
 
                             block.setStyle(
-                                "-fx-background-color: " + p.color + ";" +
+                                "-fx-background-color: " + running.color + ";" +
                                 "-fx-border-color: black;" +
                                 "-fx-background-radius: 5;"
                             );
 
-                            Label label = new Label(p.processName);
+                            Label label = new Label(running.processName);
                             label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
 
                             StackPane cell = new StackPane();
@@ -221,24 +279,25 @@ public class App extends Application {
                             ganttChart.getChildren().add(cell);
                             });
                             int startTime = currentTime[0];
-                            currentTime[0] += p.burst;
 
                             Platform.runLater(() -> {
                                 Label timeLabel = new Label(String.valueOf(startTime));
-                                timeLabel.setMinWidth(p.burst * 25);
+                                timeLabel.setMinWidth(displayBurst * 25);
                                 timeLabel.setStyle("-fx-font-size: 10px;");
 
                                 timeAxis.getChildren().add(timeLabel);
                             });
 
                             try {
-                                while(p.burst != 0)
+                                while(running.burst != 0)
                                 {
                                     while (isPaused) {
                                         try { Thread.sleep(100); } catch (Exception e) {}
                                     }
                                     Thread.sleep(1000);
-                                    p.burst--;
+                                    running.burst--;
+                                    currentTime[0]++;
+                                    refreshTimerLabel.run();
                                     Platform.runLater(() -> {
                                         processesTable.refresh();
                                     });
@@ -246,17 +305,19 @@ public class App extends Application {
                             } catch (InterruptedException ex) {
                                 ex.printStackTrace();
                             }
-                            if(p.burst == 0)
+                            if(running.burst == 0)
                             {
-                                p.finishTime = currentTime[0];
-                                int wt = p.getWaitingTime();
-                                int tat = p.getTurnaroundTime();
+                                running.finishTime = currentTime[0];
+                                int wt = running.getWaitingTime();
+                                int tat = running.getTurnaroundTime();
                                 totalWT += wt;
                                 totalTAT += tat;
                                 count++;
                             }
 
-                            processes.remove(0);
+                            synchronized (processListLock) {
+                                processes.remove(running);
+                            }
                         }
                         if(processes.size() == 0)
                         {
@@ -304,6 +365,7 @@ public class App extends Application {
                             if (best == null) {
                                 try { Thread.sleep(1000); } catch (Exception e) {}
                                 currentTime[0]++;
+                                refreshTimerLabel.run();
                                 continue;
                             }
 
@@ -324,8 +386,6 @@ public class App extends Application {
                                 ganttChart.getChildren().add(cell);
                             });
 
-                            currentTime[0] += p.burst;
-
                             Platform.runLater(() -> {
                                 Label timeLabel = new Label(String.valueOf(startTime));
                                 timeLabel.setMinWidth(p.burst * 25);
@@ -338,6 +398,7 @@ public class App extends Application {
                                 }
                                 try { Thread.sleep(1000); } catch (Exception e) {}
                                 p.burst--;
+                                currentTime[0]++;
                                 Platform.runLater(() -> processesTable.refresh());
                             }
 
@@ -416,6 +477,7 @@ public class App extends Application {
                             if (best == null) {
                                 try { Thread.sleep(1000); } catch (Exception e) {}
                                 currentTime[0]++;
+                                refreshTimerLabel.run();
                                 continue;
                             }
 
@@ -424,6 +486,7 @@ public class App extends Application {
 
                             int startTime = currentTime[0];
                             remaining.put(current, remaining.get(current) - 1);
+                            current.burst--;
                             currentTime[0]++;
 
                             Platform.runLater(() -> {
@@ -445,6 +508,7 @@ public class App extends Application {
                             long finished = remaining.values().stream().filter(v -> v == 0).count();
                             double progress = finished / (double) remaining.size();
                             Platform.runLater(() -> bar.setProgress(progress));
+                            Platform.runLater(() -> processesTable.refresh());
 
                             if (remaining.get(current) == 0) {
                                 current.finishTime = currentTime[0];
@@ -473,17 +537,32 @@ public class App extends Application {
                         int count = 0;
                         double initSize = ((double)processes.size());
 
-                        while (!processes.isEmpty()) {
+                        while (true) {
 
                             while (isPaused) {
                                 try { Thread.sleep(100); } catch (Exception e) {}
                             }
 
-                            process best = processes.get(0);
-                            for (process p : processes) {
-                                if (p.priority < best.priority) {
-                                    best = p;
+                            process best = null;
+                            synchronized (processListLock) {
+                                if (processes.isEmpty()) {
+                                    break;
                                 }
+
+                                for (process candidate : processes) {
+                                    if (candidate.arrivalTime <= currentTime[0]) {
+                                        if (best == null || candidate.priority < best.priority) {
+                                            best = candidate;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (best == null) {
+                                try { Thread.sleep(1000); } catch (Exception e) {}
+                                currentTime[0]++;
+                                refreshTimerLabel.run();
+                                continue;
                             }
 
                             var p = best;
@@ -517,7 +596,6 @@ public class App extends Application {
                             });
 
                             int startTime = currentTime[0];
-                            currentTime[0] += p.burst;
 
                             Platform.runLater(() -> {
                                 Label timeLabel = new Label(String.valueOf(startTime));
@@ -532,6 +610,7 @@ public class App extends Application {
                                     }
                                     Thread.sleep(1000);
                                     p.burst--;
+                                    currentTime[0]++;
                                     Platform.runLater(() -> processesTable.refresh());
                                 }
                             } catch (InterruptedException ex) {
@@ -547,7 +626,9 @@ public class App extends Application {
                             totalTAT += tat;
                             count++;
 
-                            processes.remove(p);
+                            synchronized (processListLock) {
+                                processes.remove(p);
+                            }
                         }
 
                         final double avgWT = count == 0 ? 0 : totalWT / (double) count;
@@ -588,11 +669,18 @@ public class App extends Application {
                                 try { Thread.sleep(100); } catch (Exception e) {}
                             }
 
-                            for (process p : processes) {
-                                remaining.putIfAbsent(p, p.burst);
+                            synchronized (processListLock) {
+                                for (process p : processes) {
+                                    remaining.putIfAbsent(p, p.burst);
+                                }
                             }
 
-                            if (processes.isEmpty()) {
+                            boolean noProcessesLeft;
+                            synchronized (processListLock) {
+                                noProcessesLeft = processes.isEmpty();
+                            }
+
+                            if (noProcessesLeft) {
                                 final double avgWT = count == 0 ? 0 : totalWT / (double) count;
                                 final double avgTAT = count == 0 ? 0 : totalTAT / (double) count;
 
@@ -615,11 +703,20 @@ public class App extends Application {
                             process best = null;
                             int bestPriority = Integer.MAX_VALUE;
 
-                            for (process p : processes) {
-                                if (p.priority < bestPriority) {
-                                    bestPriority = p.priority;
-                                    best = p;
+                            synchronized (processListLock) {
+                                for (process candidate : processes) {
+                                    if (candidate.arrivalTime <= currentTime[0] && candidate.priority < bestPriority) {
+                                        bestPriority = candidate.priority;
+                                        best = candidate;
+                                    }
                                 }
+                            }
+
+                            if (best == null) {
+                                try { Thread.sleep(1000); } catch (Exception e) {}
+                                currentTime[0]++;
+                                refreshTimerLabel.run();
+                                continue;
                             }
 
                             process p = best;
@@ -653,6 +750,7 @@ public class App extends Application {
                             });
 
                             remaining.put(p, remaining.get(p) - 1);
+                            p.burst--;
                             currentTime[0]++;
 
                             try { Thread.sleep(1000); } catch (Exception e) {}
@@ -668,8 +766,10 @@ public class App extends Application {
                                 totalTAT += tat;
                                 count++;
 
-                                processes.remove(p);
-                                remaining.remove(p);
+                                synchronized (processListLock) {
+                                    processes.remove(p);
+                                    remaining.remove(p);
+                                }
                             }
 
                             Platform.runLater(() -> processesTable.refresh());
@@ -689,16 +789,46 @@ public class App extends Application {
                         int totalWT = 0;
                         int totalTAT = 0;
                         int count = 0;
+                        Queue<process> readyQueue = new LinkedList<>();
 
-                        while (!processes.isEmpty()) {
+                        while (true) {
                             while (isPaused) {
                                 try { Thread.sleep(100); } catch (Exception e) {}
                             }
 
-                            var p = processes.get(0);
-                            int executeTime = Math.min(p.burst, quantum);
+                            process p = null;
+                            synchronized (processListLock) {
+                                for (process candidate : processes) {
+                                    if (candidate.arrivalTime <= currentTime[0] && !readyQueue.contains(candidate)) {
+                                        readyQueue.offer(candidate);
+                                    }
+                                }
 
-                            Platform.runLater(() -> execLabel.setText("Executing " + p.processName + " ..."));
+                                if (!readyQueue.isEmpty()) {
+                                    p = readyQueue.poll();
+                                }
+                            }
+
+                            if (p == null) {
+                                boolean hasPendingWork;
+                                synchronized (processListLock) {
+                                    hasPendingWork = !processes.isEmpty();
+                                }
+
+                                if (!dynamicSimulationStarted && !hasPendingWork && readyQueue.isEmpty()) {
+                                    break;
+                                }
+
+                                try { Thread.sleep(1000); } catch (InterruptedException ex) { ex.printStackTrace(); }
+                                currentTime[0]++;
+                                refreshTimerLabel.run();
+                                continue;
+                            }
+
+                            final process running = p;
+                            int executeTime = Math.min(running.burst, quantum);
+
+                            Platform.runLater(() -> execLabel.setText("Executing " + running.processName + " ..."));
 
                             final double progress = (initSize - (double) processes.size() + 1) / initSize;
                             Platform.runLater(() -> bar.setProgress(progress));
@@ -709,16 +839,14 @@ public class App extends Application {
                                 Region block = new Region();
                                 block.setPrefHeight(30);
                                 block.setPrefWidth(executeTime * 25);
-                                block.setStyle("-fx-background-color: " + p.color + ";" +
+                                block.setStyle("-fx-background-color: " + running.color + ";" +
                                     "-fx-border-color: black;-fx-background-radius: 5;");
-                                Label label = new Label(p.processName);
+                                Label label = new Label(running.processName);
                                 label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
                                 StackPane cell = new StackPane();
                                 cell.getChildren().addAll(block, label);
                                 ganttChart.getChildren().add(cell);
                             });
-
-                            currentTime[0] += executeTime;
 
                             Platform.runLater(() -> {
                                 Label timeLabel = new Label(String.valueOf(startTime));
@@ -732,21 +860,24 @@ public class App extends Application {
                                     try { Thread.sleep(100); } catch (Exception e) {}
                                 }
                                 try { Thread.sleep(1000); } catch (InterruptedException ex) { ex.printStackTrace(); }
-                                p.burst--;
+                                running.burst--;
+                                currentTime[0]++;
+                                refreshTimerLabel.run();
                                 Platform.runLater(() -> processesTable.refresh());
                             }
 
-                            processes.remove(0);
-
-                            if (p.burst > 0) {
-                                processes.add(p);
+                            if (running.burst > 0) {
+                                readyQueue.offer(running);
                             } else {
-                                p.finishTime = currentTime[0];
-                                int wt = p.getWaitingTime();
-                                int tat = p.getTurnaroundTime();
+                                running.finishTime = currentTime[0];
+                                int wt = running.getWaitingTime();
+                                int tat = running.getTurnaroundTime();
                                 totalWT += wt;
                                 totalTAT += tat;
                                 count++;
+                                synchronized (processListLock) {
+                                    processes.remove(running);
+                                }
                             }
                         }
 
@@ -1320,7 +1451,7 @@ public class App extends Application {
                         t += exec;
                         rem.put(p, rem.get(p) - exec);
 
-                        // add newly arrived during execution
+
                         while (i < list.size() && list.get(i).arrivalTime <= t) {
                             q.add(list.get(i));
                             visited[i] = true;
@@ -1363,13 +1494,17 @@ public class App extends Application {
                 arrivalTime.setDisable(false);
                 arrTimeLabel.setDisable(false);
                 startDynamic.setDisable(true);
+                stopAdding.setDisable(true);
                 startStatic.setDisable(false);
             }
             else if("Dynamic Execution".equals(newValue))
             {
-                arrivalTime.setDisable(true);
-                arrTimeLabel.setDisable(true);
+
+                boolean canEditArrival = !dynamicSimulationStarted;
+                arrivalTime.setDisable(!canEditArrival);
+                arrTimeLabel.setDisable(!canEditArrival);
                 startDynamic.setDisable(false);
+                stopAdding.setDisable(!dynamicSimulationStarted);
                 startStatic.setDisable(true);
             }
             else
@@ -1377,6 +1512,7 @@ public class App extends Application {
                 arrivalTime.setDisable(true);
                 arrTimeLabel.setDisable(true);
                 startDynamic.setDisable(true);
+                stopAdding.setDisable(true);
                 startStatic.setDisable(true);
             }
         });
@@ -1391,6 +1527,16 @@ public class App extends Application {
             execLabel.setText("Cleared");
             currentTime[0] = 0;
             seconds[0] = 0;
+            displayedTime[0] = 0;
+            dynamicSimulationStarted = false;
+            stopAdding.setDisable(true);
+            refreshTimerLabel.run();
+
+            if ("Dynamic Execution".equals(executionType.getValue())) {
+                arrivalTime.setDisable(false);
+                arrTimeLabel.setDisable(false);
+            }
+
             timerLabel.setText("Time: 0s");
         });
         
@@ -1468,7 +1614,7 @@ public class App extends Application {
 
         // ===================== BUTTON ROW =====================
 
-        HBox buttonRow = new HBox(15, clear, addProcess, startDynamic, startStatic, pause);
+        HBox buttonRow = new HBox(15, clear, addProcess, startDynamic, stopAdding, startStatic, pause);
         buttonRow.setPadding(new javafx.geometry.Insets(10));
         grid.add(buttonRow, 0, 6, 3, 1);
 
@@ -1498,7 +1644,7 @@ public class App extends Application {
         timeAxis.setMinHeight(25);
         timeAxis.setStyle("-fx-alignment: center-left;");
 
-        // IMPORTANT: prevent compression issues
+
         ganttChart.setFillHeight(true);
 
         // Scroll containers
