@@ -3,6 +3,8 @@ package com.mycompany.os.project;
 import com.mycompany.os.project.src.process;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Queue;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
@@ -10,11 +12,13 @@ import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.HPos;
+import javafx.geometry.VPos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TableColumn;
@@ -25,7 +29,9 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.RowConstraints;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
@@ -33,6 +39,7 @@ import javafx.util.Duration;
 /**
  * JavaFX App
  */
+
 public class App extends Application {
     volatile boolean isPaused = false ;
     
@@ -42,8 +49,12 @@ public class App extends Application {
         var javafxVersion = SystemInfo.javafxVersion();
         ObservableList<process> processes = FXCollections.observableArrayList();
                                 ///Configuring Process Values\\\
+        ComboBox<String> executionType = new ComboBox<>();
+        executionType.getItems().addAll("Static Execution", "Dynamic Execution");
+        executionType.setValue("Choose Exection Type");
+        
         ComboBox<String> choices = new ComboBox();
-        choices.getItems().addAll("FCFS", "SJF [Preemptive]", "SJF [Non-Preemptive]", "Priority [Preemptive]","Priority [Non-Preemptive]", "Round Robbin");
+        choices.getItems().addAll("FCFS", "SJF [Preemptive]", "SJF [Non-Preemptive]", "Priority [Preemptive]","Priority [Non-Preemptive]", "Round Robbin", "Idle");
         choices.setValue("Choose Your Scheduling Method");
         
         var nameOfProcess = new Label("Type your Proceess name");
@@ -59,7 +70,7 @@ public class App extends Application {
         priorityLabel.setDisable(true);
         Spinner<Integer> priority = new Spinner<>();
         priority.setValueFactory(
-        new SpinnerValueFactory.IntegerSpinnerValueFactory(1,1000)
+        new SpinnerValueFactory.IntegerSpinnerValueFactory(0,1000)
         );
         priority.setDisable(true);
         
@@ -94,6 +105,12 @@ public class App extends Application {
                 quantumLabel.setDisable(true);
             }
         });
+        
+        var arrTimeLabel = new Label("Arrival Time");
+        arrTimeLabel.setDisable(true);
+        Spinner<Integer> arrivalTime = new Spinner<>();
+        arrivalTime.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 1000,0));
+        arrivalTime.setDisable(true);
        
                                 ///Timer\\\
         int[] seconds = {0};
@@ -110,7 +127,11 @@ public class App extends Application {
         Button addProcess = new Button("Add Process");
         addProcess.setOnAction(e ->
         {
-          processes.add(new process(burstOfProcess.getValue(),priority.getValue(),processName.getText(),seconds[0]));
+            if(executionType.getValue() == "Dynamic Execution")
+                processes.add(new process(burstOfProcess.getValue(),priority.getValue(),processName.getText(),seconds[0]));
+            else
+                processes.add(new process(burstOfProcess.getValue(),priority.getValue(),processName.getText(),arrivalTime.getValue()));
+
         });
         
                                     ////Execution\\\\
@@ -149,8 +170,8 @@ public class App extends Application {
         var metricsLabel = new Label();
         var execLabel = new Label();
         var bar = new ProgressBar(0);
-        Button start = new Button("Start Execution");
-        start.setOnAction(eh->
+        Button startDynamic = new Button("Start Dynamic Execution");
+        startDynamic.setOnAction(eh->
         {
             switch (choices.getValue())
             {
@@ -257,7 +278,9 @@ public class App extends Application {
                     
                     break;
                 }
-                case "SJF [Non-Preemptive]": {
+                
+                case "SJF [Non-Preemptive]": 
+                {
                     timeline.play();
                     new Thread(() -> {
                         int totalWT = 0;
@@ -344,6 +367,7 @@ public class App extends Application {
                     }).start();
                     break;
                 }
+                
                 case "SJF [Preemptive]": 
                 {
                     timeline.play();
@@ -438,300 +462,224 @@ public class App extends Application {
                     }).start();
                     break;
                 }
+                
                 case "Priority [Non-Preemptive]":
                 {
                     timeline.play();
+
                     new Thread(() -> {
-                        double initSize = (double) processes.size();
                         int totalWT = 0;
                         int totalTAT = 0;
                         int count = 0;
+                        double initSize = ((double)processes.size());
 
-                        while (count < (int) initSize) {
+                        while (!processes.isEmpty()) {
+
                             while (isPaused) {
                                 try { Thread.sleep(100); } catch (Exception e) {}
                             }
 
-                            ArrayList<process> available = new ArrayList<>();
+                            process best = processes.get(0);
                             for (process p : processes) {
-                                if (p.arrivalTime <= currentTime[0] && !p.finished) {
-                                    available.add(p);
+                                if (p.priority < best.priority) {
+                                    best = p;
                                 }
                             }
 
-                            if (available.isEmpty()) {
+                            var p = best;
 
-                                int idleStart = currentTime[0];
-                                Platform.runLater(() -> {
-                                    Region block = new Region();
-                                    block.setPrefHeight(30);
-                                    block.setPrefWidth(1 * 25);
-                                    block.setStyle("-fx-background-color: #888888;" +
-                                            "-fx-border-color: black;-fx-background-radius: 5;");
-                                    Label label = new Label("IDLE");
-                                    label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
-                                    StackPane cell = new StackPane();
-                                    cell.getChildren().addAll(block, label);
-                                    ganttChart.getChildren().add(cell);
+                            Platform.runLater(() -> {
+                                execLabel.setText("Executing " + p.processName + " ...");
+                            });
 
-                                    Label timeLabel = new Label(String.valueOf(idleStart));
-                                    timeLabel.setMinWidth(1 * 25);
-                                    timeLabel.setStyle("-fx-font-size: 10px;");
-                                    timeAxis.getChildren().add(timeLabel);
-                                });
-
-                                try { Thread.sleep(1000); } catch (InterruptedException ex) { ex.printStackTrace(); }
-                                currentTime[0]++;
-                                continue;
-                            }
-
-                            available.sort((p1, p2) -> Integer.compare(p1.priority, p2.priority));
-                            process current = available.get(0);
-                            int burstTime = current.burst;
-
-                            Platform.runLater(() -> execLabel.setText("Executing " + current.processName + " ..."));
-
-                            final double progress = (double) count / initSize;
-                            Platform.runLater(() -> bar.setProgress(progress));
-
-                            int startTime = currentTime[0];
-
+                            final double progress = (initSize - ((double)processes.size()) + 1) / initSize;
+                            Platform.runLater(() -> {
+                                bar.setProgress(progress);
+                            });
 
                             Platform.runLater(() -> {
                                 Region block = new Region();
                                 block.setPrefHeight(30);
-                                block.setPrefWidth(burstTime * 25);
-                                block.setStyle("-fx-background-color: " + current.color + ";" +
-                                        "-fx-border-color: black;-fx-background-radius: 5;");
-                                Label label = new Label(current.processName);
+                                block.setPrefWidth(p.burst * 25);
+                                block.setStyle(
+                                    "-fx-background-color: " + p.color + ";" +
+                                    "-fx-border-color: black;" +
+                                    "-fx-background-radius: 5;"
+                                );
+
+                                Label label = new Label(p.processName);
                                 label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+
                                 StackPane cell = new StackPane();
                                 cell.getChildren().addAll(block, label);
+
                                 ganttChart.getChildren().add(cell);
                             });
 
+                            int startTime = currentTime[0];
+                            currentTime[0] += p.burst;
 
                             Platform.runLater(() -> {
                                 Label timeLabel = new Label(String.valueOf(startTime));
-                                timeLabel.setMinWidth(burstTime * 25);
-                                timeLabel.setStyle("-fx-font-size: 10px;");
+                                timeLabel.setMinWidth(p.burst * 25);
                                 timeAxis.getChildren().add(timeLabel);
                             });
 
-
-                            for (int i = 0; i < burstTime; i++) {
-                                while (isPaused) {
-                                    try { Thread.sleep(100); } catch (Exception e) {}
+                            try {
+                                while (p.burst != 0) {
+                                    while (isPaused) {
+                                        try { Thread.sleep(100); } catch (Exception e) {}
+                                    }
+                                    Thread.sleep(1000);
+                                    p.burst--;
+                                    Platform.runLater(() -> processesTable.refresh());
                                 }
-                                try { Thread.sleep(1000); } catch (InterruptedException ex) { ex.printStackTrace(); }
-                                current.burst--;
-                                Platform.runLater(() -> processesTable.refresh());
+                            } catch (InterruptedException ex) {
+                                ex.printStackTrace();
                             }
 
-                            current.finishTime = currentTime[0] + burstTime;
-                            currentTime[0] = current.finishTime;
-                            current.finished = true;
+                            p.finishTime = currentTime[0];
 
-                            int wt = current.getWaitingTime();
-                            int tat = current.getTurnaroundTime();
+                            int wt = p.getWaitingTime();
+                            int tat = p.getTurnaroundTime();
+
                             totalWT += wt;
                             totalTAT += tat;
                             count++;
+
+                            processes.remove(p);
                         }
 
-                        final double avgWT = totalWT / (double) count;
-                        final double avgTAT = totalTAT / (double) count;
+                        final double avgWT = count == 0 ? 0 : totalWT / (double) count;
+                        final double avgTAT = count == 0 ? 0 : totalTAT / (double) count;
+
                         Platform.runLater(() -> {
                             execLabel.setText("Done!");
-                            metricsLabel.setText("Average Waiting Time: " + avgWT +
-                                    "\nAverage Turnaround Time: " + avgTAT);
+                            metricsLabel.setText(
+                                "Average Waiting Time: " + avgWT +
+                                "\nAverage Turnaround Time: " + avgTAT
+                            );
+
                             Label end = new Label(String.valueOf(currentTime[0]));
-                            end.setStyle("-fx-font-size: 10px;");
                             timeAxis.getChildren().add(end);
                         });
 
                         seconds[0] = 0;
                         timeline.stop();
                     }).start();
+
                     break;
                 }
-
+                
                 case "Priority [Preemptive]":
                 {
                     timeline.play();
+
                     new Thread(() -> {
-                        double initSize = (double) processes.size();
+                        HashMap<process, Integer> remaining = new HashMap<>();
+
                         int totalWT = 0;
                         int totalTAT = 0;
                         int count = 0;
 
+                        while (true) {
 
-                        int[] remaining = new int[processes.size()];
-                        for (int i = 0; i < processes.size(); i++) {
-                            remaining[i] = processes.get(i).burst;
-                        }
-
-                        process lastProcess = null;
-                        int blockStart = 0;
-                        int blockDuration = 0;
-
-                        while (count < (int) initSize) {
                             while (isPaused) {
                                 try { Thread.sleep(100); } catch (Exception e) {}
                             }
 
-
-                            ArrayList<process> available = new ArrayList<>();
-                            for (int i = 0; i < processes.size(); i++) {
-                                process p = processes.get(i);
-                                if (p.arrivalTime <= currentTime[0] && !p.finished) {
-                                    available.add(p);
-                                }
+                            for (process p : processes) {
+                                remaining.putIfAbsent(p, p.burst);
                             }
 
-                            if (available.isEmpty()) {
-                                if (lastProcess != null) {
-                                    final process fp = lastProcess;
-                                    final int fd = blockDuration;
-                                    Platform.runLater(() -> {
-                                        Region block = new Region();
-                                        block.setPrefHeight(30);
-                                        block.setPrefWidth(fd * 25);
-                                        block.setStyle("-fx-background-color: " + fp.color + ";" +
-                                                "-fx-border-color: black;-fx-background-radius: 5;");
-                                        Label label = new Label(fp.processName);
-                                        label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
-                                        StackPane cell = new StackPane();
-                                        cell.getChildren().addAll(block, label);
-                                        ganttChart.getChildren().add(cell);
-                                    });
-                                    lastProcess = null;
-                                    blockDuration = 0;
-                                }
+                            if (processes.isEmpty()) {
+                                final double avgWT = count == 0 ? 0 : totalWT / (double) count;
+                                final double avgTAT = count == 0 ? 0 : totalTAT / (double) count;
 
-
-                                int idleStart = currentTime[0];
                                 Platform.runLater(() -> {
-                                    Region block = new Region();
-                                    block.setPrefHeight(30);
-                                    block.setPrefWidth(1 * 25);
-                                    block.setStyle("-fx-background-color: #888888;" +
-                                            "-fx-border-color: black;-fx-background-radius: 5;");
-                                    Label label = new Label("IDLE");
-                                    label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
-                                    StackPane cell = new StackPane();
-                                    cell.getChildren().addAll(block, label);
-                                    ganttChart.getChildren().add(cell);
+                                    execLabel.setText("Done!");
+                                    metricsLabel.setText(
+                                        "Average Waiting Time: " + avgWT +
+                                        "\nAverage Turnaround Time: " + avgTAT
+                                    );
 
-                                    Label timeLabel = new Label(String.valueOf(idleStart));
-                                    timeLabel.setMinWidth(1 * 25);
-                                    timeLabel.setStyle("-fx-font-size: 10px;");
-                                    timeAxis.getChildren().add(timeLabel);
+                                    Label end = new Label(String.valueOf(currentTime[0]));
+                                    timeAxis.getChildren().add(end);
                                 });
 
-                                try { Thread.sleep(1000); } catch (InterruptedException ex) { ex.printStackTrace(); }
-                                currentTime[0]++;
-                                continue;
+                                seconds[0] = 0;
+                                timeline.stop();
+                                break;
                             }
 
+                            process best = null;
+                            int bestPriority = Integer.MAX_VALUE;
 
-                            available.sort((p1, p2) -> Integer.compare(p1.priority, p2.priority));
-                            process current = available.get(0);
-                            int currentIndex = processes.indexOf(current);
-
-
-                            if (current != lastProcess) {
-                                if (lastProcess != null) {
-                                    final process fp = lastProcess;
-                                    final int fd = blockDuration;
-                                    final int fs = blockStart;
-                                    Platform.runLater(() -> {
-                                        Region block = new Region();
-                                        block.setPrefHeight(30);
-                                        block.setPrefWidth(fd * 25);
-                                        block.setStyle("-fx-background-color: " + fp.color + ";" +
-                                                "-fx-border-color: black;-fx-background-radius: 5;");
-                                        Label label = new Label(fp.processName);
-                                        label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
-                                        StackPane cell = new StackPane();
-                                        cell.getChildren().addAll(block, label);
-                                        ganttChart.getChildren().add(cell);
-
-                                        Label timeLabel = new Label(String.valueOf(fs));
-                                        timeLabel.setMinWidth(fd * 25);
-                                        timeLabel.setStyle("-fx-font-size: 10px;");
-                                        timeAxis.getChildren().add(timeLabel);
-                                    });
+                            for (process p : processes) {
+                                if (p.priority < bestPriority) {
+                                    bestPriority = p.priority;
+                                    best = p;
                                 }
-                                lastProcess = current;
-                                blockStart = currentTime[0];
-                                blockDuration = 0;
-
-                                final process fc = current;
-                                Platform.runLater(() -> execLabel.setText("Executing " + fc.processName + " ..."));
-                                final double progress = (double) count / initSize;
-                                Platform.runLater(() -> bar.setProgress(progress));
                             }
 
+                            process p = best;
 
-                            try { Thread.sleep(1000); } catch (InterruptedException ex) { ex.printStackTrace(); }
-                            remaining[currentIndex]--;
-                            current.burst = remaining[currentIndex];
-                            blockDuration++;
+                            Platform.runLater(() -> {
+                                execLabel.setText("Executing " + p.processName + " ...");
+                            });
+
+                            int startTime = currentTime[0];
+
+                            Platform.runLater(() -> {
+                                Region block = new Region();
+                                block.setPrefHeight(30);
+                                block.setPrefWidth(25);
+                                block.setStyle(
+                                    "-fx-background-color: " + p.color + ";" +
+                                    "-fx-border-color: black;"
+                                );
+
+                                Label label = new Label(p.processName);
+                                label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+
+                                StackPane cell = new StackPane();
+                                cell.getChildren().addAll(block, label);
+
+                                ganttChart.getChildren().add(cell);
+
+                                Label timeLabel = new Label(String.valueOf(startTime));
+                                timeLabel.setMinWidth(25);
+                                timeAxis.getChildren().add(timeLabel);
+                            });
+
+                            remaining.put(p, remaining.get(p) - 1);
                             currentTime[0]++;
-                            Platform.runLater(() -> processesTable.refresh());
 
-                            if (remaining[currentIndex] == 0) {
-                                current.finishTime = currentTime[0];
-                                current.finished = true;
+                            try { Thread.sleep(1000); } catch (Exception e) {}
 
-                                final process fp = lastProcess;
-                                final int fd = blockDuration;
-                                final int fs = blockStart;
-                                Platform.runLater(() -> {
-                                    Region block = new Region();
-                                    block.setPrefHeight(30);
-                                    block.setPrefWidth(fd * 25);
-                                    block.setStyle("-fx-background-color: " + fp.color + ";" +
-                                            "-fx-border-color: black;-fx-background-radius: 5;");
-                                    Label label = new Label(fp.processName);
-                                    label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
-                                    StackPane cell = new StackPane();
-                                    cell.getChildren().addAll(block, label);
-                                    ganttChart.getChildren().add(cell);
+                            if (remaining.get(p) == 0) {
 
-                                    Label timeLabel = new Label(String.valueOf(fs));
-                                    timeLabel.setMinWidth(fd * 25);
-                                    timeLabel.setStyle("-fx-font-size: 10px;");
-                                    timeAxis.getChildren().add(timeLabel);
-                                });
-                                lastProcess = null;
-                                blockDuration = 0;
+                                p.finishTime = currentTime[0];
 
-                                int wt = current.getWaitingTime();
-                                int tat = current.getTurnaroundTime();
+                                int wt = p.getWaitingTime();
+                                int tat = p.getTurnaroundTime();
+
                                 totalWT += wt;
                                 totalTAT += tat;
                                 count++;
+
+                                processes.remove(p);
+                                remaining.remove(p);
                             }
+
+                            Platform.runLater(() -> processesTable.refresh());
                         }
 
-                        final double avgWT = totalWT / (double) count;
-                        final double avgTAT = totalTAT / (double) count;
-                        Platform.runLater(() -> {
-                            execLabel.setText("Done!");
-                            metricsLabel.setText("Average Waiting Time: " + avgWT +
-                                    "\nAverage Turnaround Time: " + avgTAT);
-                            Label end = new Label(String.valueOf(currentTime[0]));
-                            end.setStyle("-fx-font-size: 10px;");
-                            timeAxis.getChildren().add(end);
-                        });
-
-                        seconds[0] = 0;
-                        timeline.stop();
                     }).start();
+
                     break;
                 }
+                
                 case "Round Robbin": 
                 {
                     int quantum = quantumBox.getValue();
@@ -818,6 +766,618 @@ public class App extends Application {
                     }).start();
                     break;
                 }
+                
+                default:
+                {
+                    timeline.play();
+                }
+            }
+        });
+        
+        Button startStatic = new Button("Start Static Execution");
+        startStatic.setOnAction(eh -> {
+            switch(choices.getValue())
+            {
+                case "FCFS":
+                {
+                    ganttChart.getChildren().clear();
+                    timeAxis.getChildren().clear();
+
+                    ArrayList<process> list = new ArrayList<>();
+                    for (process p : processes) {
+                        list.add(new process(p.burst, p.priority, p.processName, p.arrivalTime));
+                    }
+
+                    list.sort((a, b) -> Integer.compare(a.arrivalTime, b.arrivalTime));
+
+                    int t = 0;
+                    int totalWT = 0;
+                    int totalTAT = 0;
+
+                    for (process p : list) {
+
+                        if (t < p.arrivalTime) {
+                            t = p.arrivalTime; // CPU idle handling
+                        }
+
+                        int start = t;
+
+                        Region block = new Region();
+                        block.setPrefHeight(30);
+                        block.setPrefWidth(p.burst * 25);
+                        block.setStyle("-fx-background-color:" + p.color + "; -fx-border-color:black;");
+
+                        StackPane cell = new StackPane(block, new Label(p.processName));
+                        ganttChart.getChildren().add(cell);
+
+                        Label timeLabel = new Label(String.valueOf(start));
+                        timeLabel.setMinWidth(p.burst * 25);
+                        timeLabel.setPrefWidth(p.burst * 25);
+                        timeLabel.setStyle("-fx-font-size:10px;");
+                        timeAxis.getChildren().add(timeLabel);
+
+                        t += p.burst;
+
+                        p.finishTime = t;
+
+                        int tat = p.finishTime - p.arrivalTime;
+                        int wt = tat - p.burst;
+
+                        totalWT += wt;
+                        totalTAT += tat;
+                    }
+
+                    Label end = new Label(String.valueOf(t));
+                    end.setMinWidth(25);
+                    timeAxis.getChildren().add(end);
+
+                    metricsLabel.setText(
+                        "Average Waiting Time: " + (totalWT / (double) list.size()) +
+                        "\nAverage Turnaround Time: " + (totalTAT / (double) list.size())
+                    );
+
+                    break;
+                }
+                case "SJF [Non-Preemptive]":
+                {
+                    ganttChart.getChildren().clear();
+                    timeAxis.getChildren().clear();
+
+                    ArrayList<process> list = new ArrayList<>();
+                    for (process p : processes) {
+                        list.add(new process(p.burst, p.priority, p.processName, p.arrivalTime));
+                    }
+
+                    boolean[] done = new boolean[list.size()];
+
+                    int t = 0;
+                    int completed = 0;
+
+                    int totalWT = 0;
+                    int totalTAT = 0;
+
+                    while (completed < list.size()) {
+
+                        process best = null;
+                        int idx = -1;
+
+                        for (int i = 0; i < list.size(); i++) {
+
+                            process p = list.get(i);
+
+                            if (!done[i] && p.arrivalTime <= t) {
+
+                                if (best == null ||
+                                        p.burst < best.burst ||
+                                        (p.burst == best.burst && p.arrivalTime < best.arrivalTime)) {
+                                    best = p;
+                                    idx = i;
+                                }
+                            }
+                        }
+
+                        // CPU idle
+                        if (best == null) {
+                            t++;
+                            continue;
+                        }
+
+                        int start = t;
+
+                        Region block = new Region();
+                        block.setPrefHeight(30);
+                        block.setPrefWidth(best.burst * 25);
+                        block.setStyle("-fx-background-color:" + best.color + "; -fx-border-color:black;");
+
+                        StackPane cell = new StackPane(block, new Label(best.processName));
+                        ganttChart.getChildren().add(cell);
+
+                        Label timeLabel = new Label(String.valueOf(start));
+                        timeLabel.setMinWidth(best.burst * 25);
+                        timeLabel.setPrefWidth(best.burst * 25);
+                        timeLabel.setStyle("-fx-font-size:10px;");
+                        timeAxis.getChildren().add(timeLabel);
+
+                        t += best.burst;
+
+                        best.finishTime = t;
+
+                        int tat = t - best.arrivalTime;
+                        int wt = tat - best.burst;
+
+                        totalWT += wt;
+                        totalTAT += tat;
+
+                        done[idx] = true;
+                        completed++;
+                    }
+
+                    Label end = new Label(String.valueOf(t));
+                    end.setMinWidth(25);
+                    timeAxis.getChildren().add(end);
+
+                    metricsLabel.setText(
+                        "Average Waiting Time: " + (totalWT / (double) list.size()) +
+                        "\nAverage Turnaround Time: " + (totalTAT / (double) list.size())
+                    );
+
+                    break;
+                }
+                case "SJF [Preemptive]":
+                {
+                    ganttChart.getChildren().clear();
+                    timeAxis.getChildren().clear();
+
+                    ArrayList<process> list = new ArrayList<>();
+                    for (process p : processes) {
+                        list.add(new process(p.burst, p.priority, p.processName, p.arrivalTime));
+                    }
+
+                    HashMap<process, Integer> rem = new HashMap<>();
+                    for (process p : list) rem.put(p, p.burst);
+
+                    boolean[] done = new boolean[list.size()];
+
+                    int t = 0;
+                    int completed = 0;
+
+                    int totalWT = 0;
+                    int totalTAT = 0;
+
+                    process last = null;
+                    int blockStart = 0;
+
+                    while (completed < list.size()) {
+
+                        process best = null;
+                        int min = Integer.MAX_VALUE;
+                        int bestIdx = -1;
+
+                        for (int i = 0; i < list.size(); i++) {
+
+                            process p = list.get(i);
+
+                            if (p.arrivalTime <= t && rem.get(p) > 0) {
+
+                                if (rem.get(p) < min) {
+                                    min = rem.get(p);
+                                    best = p;
+                                    bestIdx = i;
+                                }
+                            }
+                        }
+
+                        // CPU idle
+                        if (best == null) {
+                            t++;
+                            continue;
+                        }
+
+                        // context switch → close previous block
+                        if (best != last) {
+
+                            if (last != null) {
+                                int duration = t - blockStart;
+
+                                Region block = new Region();
+                                block.setPrefHeight(30);
+                                block.setPrefWidth(duration * 25);
+                                block.setStyle("-fx-background-color:" + last.color + "; -fx-border-color:black;");
+
+                                StackPane cell = new StackPane(block, new Label(last.processName));
+                                ganttChart.getChildren().add(cell);
+
+                                Label timeLabel = new Label(String.valueOf(blockStart));
+                                timeLabel.setMinWidth(duration * 25);
+                                timeLabel.setPrefWidth(duration * 25);
+                                timeLabel.setStyle("-fx-font-size:10px;");
+                                timeAxis.getChildren().add(timeLabel);
+                            }
+
+                            last = best;
+                            blockStart = t;
+                        }
+
+                        // execute 1 unit
+                        rem.put(best, rem.get(best) - 1);
+                        t++;
+
+                        if (rem.get(best) == 0 && !done[bestIdx]) {
+
+                            done[bestIdx] = true;
+                            completed++;
+
+                            best.finishTime = t;
+
+                            int tat = t - best.arrivalTime;
+                            int wt = tat - best.burst;
+
+                            totalWT += wt;
+                            totalTAT += tat;
+                        }
+                    }
+
+                    // close last block
+                    if (last != null) {
+                        int duration = t - blockStart;
+
+                        Region block = new Region();
+                        block.setPrefHeight(30);
+                        block.setPrefWidth(duration * 25);
+                        block.setStyle("-fx-background-color:" + last.color + "; -fx-border-color:black;");
+
+                        StackPane cell = new StackPane(block, new Label(last.processName));
+                        ganttChart.getChildren().add(cell);
+
+                        Label timeLabel = new Label(String.valueOf(blockStart));
+                        timeLabel.setMinWidth(duration * 25);
+                        timeLabel.setPrefWidth(duration * 25);
+                        timeLabel.setStyle("-fx-font-size:10px;");
+                        timeAxis.getChildren().add(timeLabel);
+                    }
+
+                    Label end = new Label(String.valueOf(t));
+                    end.setMinWidth(25);
+                    timeAxis.getChildren().add(end);
+
+                    metricsLabel.setText(
+                        "Average Waiting Time: " + (totalWT / (double) list.size()) +
+                        "\nAverage Turnaround Time: " + (totalTAT / (double) list.size())
+                    );
+
+                    break;
+                }
+                case "Priority [Non-Preemptive]":
+                {
+                    ganttChart.getChildren().clear();
+                    timeAxis.getChildren().clear();
+
+                    ArrayList<process> list = new ArrayList<>();
+                    for (process p : processes) {
+                        list.add(new process(p.burst, p.priority, p.processName, p.arrivalTime));
+                    }
+
+                    boolean[] done = new boolean[list.size()];
+
+                    int t = 0;
+                    int completed = 0;
+
+                    int totalWT = 0;
+                    int totalTAT = 0;
+
+                    while (completed < list.size()) {
+
+                        process best = null;
+                        int bestIdx = -1;
+
+                        for (int i = 0; i < list.size(); i++) {
+
+                            process p = list.get(i);
+
+                            if (!done[i] && p.arrivalTime <= t) {
+
+                                if (best == null ||
+                                        p.priority < best.priority ||
+                                        (p.priority == best.priority && p.arrivalTime < best.arrivalTime)) {
+                                    best = p;
+                                    bestIdx = i;
+                                }
+                            }
+                        }
+
+                        if (best == null) {
+                            t++;
+                            continue;
+                        }
+
+                        int start = t;
+
+                        Region block = new Region();
+                        block.setPrefHeight(30);
+                        block.setPrefWidth(best.burst * 25);
+                        block.setStyle("-fx-background-color:" + best.color + "; -fx-border-color:black;");
+
+                        StackPane cell = new StackPane(block, new Label(best.processName));
+                        ganttChart.getChildren().add(cell);
+
+                        Label timeLabel = new Label(String.valueOf(start));
+                        timeLabel.setMinWidth(best.burst * 25);
+                        timeLabel.setPrefWidth(best.burst * 25);
+                        timeLabel.setStyle("-fx-font-size:10px;");
+                        timeAxis.getChildren().add(timeLabel);
+
+                        t += best.burst;
+
+                        best.finishTime = t;
+
+                        int tat = t - best.arrivalTime;
+                        int wt = tat - best.burst;
+
+                        totalWT += wt;
+                        totalTAT += tat;
+
+                        done[bestIdx] = true;
+                        completed++;
+                    }
+
+                    Label end = new Label(String.valueOf(t));
+                    end.setMinWidth(25);
+                    timeAxis.getChildren().add(end);
+
+                    metricsLabel.setText(
+                        "Average Waiting Time: " + (totalWT / (double) list.size()) +
+                        "\nAverage Turnaround Time: " + (totalTAT / (double) list.size())
+                    );
+
+                    break;
+                }
+                case "Priority [Preemptive]":
+                {
+                    ganttChart.getChildren().clear();
+                    timeAxis.getChildren().clear();
+
+                    ArrayList<process> list = new ArrayList<>();
+                    for (process p : processes) {
+                        list.add(new process(p.burst, p.priority, p.processName, p.arrivalTime));
+                    }
+
+                    HashMap<process, Integer> rem = new HashMap<>();
+                    for (process p : list) {
+                        rem.put(p, p.burst);
+                    }
+
+                    boolean[] done = new boolean[list.size()];
+
+                    int t = 0;
+                    int completed = 0;
+
+                    int totalWT = 0;
+                    int totalTAT = 0;
+
+                    process last = null;
+                    int blockStart = 0;
+
+                    while (completed < list.size()) {
+
+                        process best = null;
+                        int bestPriority = Integer.MAX_VALUE;
+                        int bestIdx = -1;
+
+                        for (int i = 0; i < list.size(); i++) {
+
+                            process p = list.get(i);
+
+                            if (p.arrivalTime <= t && rem.get(p) > 0) {
+
+                                if (p.priority < bestPriority) {
+                                    bestPriority = p.priority;
+                                    best = p;
+                                    bestIdx = i;
+                                }
+                            }
+                        }
+
+                        // CPU idle
+                        if (best == null) {
+                            t++;
+                            continue;
+                        }
+
+                        // context switch handling
+                        if (best != last) {
+
+                            if (last != null) {
+                                int duration = t - blockStart;
+
+                                Region block = new Region();
+                                block.setPrefHeight(30);
+                                block.setPrefWidth(duration * 25);
+                                block.setStyle("-fx-background-color:" + last.color + "; -fx-border-color:black;");
+
+                                StackPane cell = new StackPane(block, new Label(last.processName));
+                                ganttChart.getChildren().add(cell);
+
+                                Label timeLabel = new Label(String.valueOf(blockStart));
+                                timeLabel.setMinWidth(duration * 25);
+                                timeLabel.setPrefWidth(duration * 25);
+                                timeLabel.setStyle("-fx-font-size:10px;");
+                                timeAxis.getChildren().add(timeLabel);
+                            }
+
+                            last = best;
+                            blockStart = t;
+                        }
+
+                        // execute 1 unit
+                        rem.put(best, rem.get(best) - 1);
+                        t++;
+
+                        if (rem.get(best) == 0 && !done[bestIdx]) {
+
+                            done[bestIdx] = true;
+                            completed++;
+
+                            best.finishTime = t;
+
+                            int tat = t - best.arrivalTime;
+                            int wt = tat - best.burst;
+
+                            totalWT += wt;
+                            totalTAT += tat;
+                        }
+                    }
+
+                    // close last running block
+                    if (last != null) {
+                        int duration = t - blockStart;
+
+                        Region block = new Region();
+                        block.setPrefHeight(30);
+                        block.setPrefWidth(duration * 25);
+                        block.setStyle("-fx-background-color:" + last.color + "; -fx-border-color:black;");
+
+                        StackPane cell = new StackPane(block, new Label(last.processName));
+                        ganttChart.getChildren().add(cell);
+
+                        Label timeLabel = new Label(String.valueOf(blockStart));
+                        timeLabel.setMinWidth(duration * 25);
+                        timeLabel.setPrefWidth(duration * 25);
+                        timeLabel.setStyle("-fx-font-size:10px;");
+                        timeAxis.getChildren().add(timeLabel);
+                    }
+
+                    Label end = new Label(String.valueOf(t));
+                    end.setMinWidth(25);
+                    timeAxis.getChildren().add(end);
+
+                    metricsLabel.setText(
+                        "Average Waiting Time: " + (totalWT / (double) list.size()) +
+                        "\nAverage Turnaround Time: " + (totalTAT / (double) list.size())
+                    );
+
+                    break;
+                }
+                case "Round Robbin":
+                {
+                    ganttChart.getChildren().clear();
+                    timeAxis.getChildren().clear();
+
+                    int quantum = quantumBox.getValue();
+
+                    ArrayList<process> list = new ArrayList<>();
+                    for (process p : processes)
+                        list.add(new process(p.burst, p.priority, p.processName, p.arrivalTime));
+
+                    list.sort((a, b) -> Integer.compare(a.arrivalTime, b.arrivalTime));
+
+                    Queue<process> q = new LinkedList<>();
+                    HashMap<process, Integer> rem = new HashMap<>();
+                    boolean[] visited = new boolean[list.size()];
+
+                    for (process p : list)
+                        rem.put(p, p.burst);
+
+                    int t = 0;
+                    int i = 0;
+
+                    int totalWT = 0, totalTAT = 0;
+                    int completed = 0;
+
+                    while (completed < list.size()) {
+
+                        // add newly arrived processes
+                        while (i < list.size() && list.get(i).arrivalTime <= t) {
+                            q.add(list.get(i));
+                            visited[i] = true;
+                            i++;
+                        }
+
+                        if (q.isEmpty()) {
+                            t++;
+                            continue;
+                        }
+
+                        process p = q.poll();
+
+                        int exec = Math.min(quantum, rem.get(p));
+                        int start = t;
+
+                        Platform.runLater(() -> {
+                            Region block = new Region();
+                            block.setPrefWidth(exec * 25);
+                            block.setPrefHeight(30);
+                            block.setStyle("-fx-background-color:" + p.color + ";");
+
+                            Label label = new Label(p.processName);
+                            StackPane cell = new StackPane(block, label);
+
+                            ganttChart.getChildren().add(cell);
+
+                            Label timeLabel = new Label(String.valueOf(start));
+                            timeAxis.getChildren().add(timeLabel);
+                        });
+
+                        t += exec;
+                        rem.put(p, rem.get(p) - exec);
+
+                        // add newly arrived during execution
+                        while (i < list.size() && list.get(i).arrivalTime <= t) {
+                            q.add(list.get(i));
+                            visited[i] = true;
+                            i++;
+                        }
+
+                        if (rem.get(p) > 0) {
+                            q.add(p);
+                        } else {
+                            p.finishTime = t;
+
+                            int tat = t - p.arrivalTime;
+                            int wt = tat - p.burst;
+
+                            totalWT += wt;
+                            totalTAT += tat;
+
+                            completed++;
+                        }
+                    }
+
+                    timeAxis.getChildren().add(new Label(String.valueOf(t)));
+
+                    metricsLabel.setText(
+                        "Average Waiting Time: " + (totalWT / (double) list.size()) +
+                        "\nAverage Turnaround Time: " + (totalTAT / (double) list.size())
+                    );
+
+                    break;
+                }
+            }
+        });
+        
+        
+        executionType.valueProperty().addListener((obs, oldVaue, newValue) -> {
+            if(newValue == null)
+                return;
+            if("Static Execution".equals(newValue))
+            {
+                arrivalTime.setDisable(false);
+                arrTimeLabel.setDisable(false);
+                startDynamic.setDisable(true);
+                startStatic.setDisable(false);
+            }
+            else if("Dynamic Execution".equals(newValue))
+            {
+                arrivalTime.setDisable(true);
+                arrTimeLabel.setDisable(true);
+                startDynamic.setDisable(false);
+                startStatic.setDisable(true);
+            }
+            else
+            {
+                arrivalTime.setDisable(true);
+                arrTimeLabel.setDisable(true);
+                startDynamic.setDisable(true);
+                startStatic.setDisable(true);
             }
         });
         
@@ -856,65 +1416,138 @@ public class App extends Application {
         
         GridPane grid = new GridPane();
 
-        grid.setHgap(25);
-        grid.setVgap(20);
+        grid.setHgap(20);
+        grid.setVgap(15);
         grid.setPadding(new javafx.geometry.Insets(20));
 
+        // Columns
         ColumnConstraints col1 = new ColumnConstraints();
-        col1.setPercentWidth(33);
+        col1.setPercentWidth(35);
 
         ColumnConstraints col2 = new ColumnConstraints();
-        col2.setPercentWidth(33);
+        col2.setPercentWidth(35);
 
         ColumnConstraints col3 = new ColumnConstraints();
-        col3.setPercentWidth(34);
+        col3.setPercentWidth(30);
 
         grid.getColumnConstraints().addAll(col1, col2, col3);
 
-        grid.add(choices, 1, 0);
+        for (int i = 0; i < 13; i++) {
+            RowConstraints r = new RowConstraints();
+            r.setVgrow(Priority.NEVER);
+            grid.getRowConstraints().add(r);
+        }
 
-        grid.add(nameOfProcess, 0, 1);
-        grid.add(processName, 1, 1);
+        // IMPORTANT FIXES
+        grid.getRowConstraints().get(10).setVgrow(Priority.ALWAYS); // gantt
+        grid.getRowConstraints().get(11).setVgrow(Priority.ALWAYS); // table
+        grid.getRowConstraints().get(12).setVgrow(Priority.NEVER);  // metrics OK
+        grid.getRowConstraints().get(12).setMinHeight(Region.USE_PREF_SIZE);
+        GridPane.setValignment(metricsLabel, VPos.CENTER);
 
-        grid.add(burstOfProcessLabel, 0, 2);
-        grid.add(burstOfProcess, 1, 2);
 
-        grid.add(priorityLabel, 0, 3);
-        grid.add(priority, 1, 3);
+        // ===================== INPUT CONTROLS =====================
 
-        grid.add(quantumLabel, 0, 4);
-        grid.add(quantumBox, 1, 4);
+        grid.add(executionType, 0, 0, 3, 1);
+        grid.add(choices, 0, 1, 3, 1);
 
-        grid.add(clear, 0, 5);
-        grid.add(addProcess, 1, 5);
-        grid.add(start, 2, 5);
-        grid.add(pause,2,6);
+        grid.add(nameOfProcess, 0, 2);
+        grid.add(processName, 1, 2, 2, 1);
 
-        grid.add(timerLabel, 0, 6, 3, 1);
+        grid.add(burstOfProcessLabel, 0, 3);
+        grid.add(burstOfProcess, 1, 3);
+
+        grid.add(priorityLabel, 0, 4);
+        grid.add(priority, 1, 4);
+
+        grid.add(quantumLabel, 0, 5);
+        grid.add(quantumBox, 1, 5);
+
+        HBox arrivalBox = new HBox(10, arrTimeLabel, arrivalTime);
+        grid.add(arrivalBox, 2, 3);
+
+        // ===================== BUTTON ROW =====================
+
+        HBox buttonRow = new HBox(15, clear, addProcess, startDynamic, startStatic, pause);
+        buttonRow.setPadding(new javafx.geometry.Insets(10));
+        grid.add(buttonRow, 0, 6, 3, 1);
+
+
+        // ===================== STATUS =====================
+
+        grid.add(timerLabel, 0, 7, 3, 1);
         GridPane.setHalignment(timerLabel, HPos.CENTER);
 
-        grid.add(execLabel, 0, 7, 3, 1);
+        grid.add(execLabel, 0, 8, 3, 1);
         GridPane.setHalignment(execLabel, HPos.CENTER);
 
-        grid.add(bar, 0, 8, 3, 1);
+
+        // ===================== PROGRESS BAR =====================
+
         bar.setMaxWidth(Double.MAX_VALUE);
         GridPane.setHgrow(bar, Priority.ALWAYS);
+        grid.add(bar, 0, 9, 3, 1);
 
-        grid.add(ganttChart, 0, 9, 3, 1);
 
-        grid.add(timeAxis, 0, 10, 3, 1);
-        
-        grid.add(metricsLabel, 0, 12, 3, 1);
-        GridPane.setHalignment(metricsLabel, HPos.CENTER);
+        // ===================== GANTT + TIME AXIS (FIXED) =====================
+
+        ganttChart.setSpacing(1);
+        ganttChart.setMinHeight(35);
+
+        timeAxis.setSpacing(0);
+        timeAxis.setMinHeight(25);
+        timeAxis.setStyle("-fx-alignment: center-left;");
+
+        // IMPORTANT: prevent compression issues
+        ganttChart.setFillHeight(true);
+
+        // Scroll containers
+        ScrollPane ganttScroll = new ScrollPane(ganttChart);
+        ganttScroll.setFitToHeight(false);
+        ganttScroll.setPannable(true);
+
+        ScrollPane timeScroll = new ScrollPane(timeAxis);
+        timeScroll.setFitToHeight(false);
+        timeScroll.setPannable(true);
+
+        // stack them vertically
+        VBox ganttBox = new VBox(5, ganttScroll, timeScroll);
+
+        GridPane.setHgrow(ganttBox, Priority.ALWAYS);
+        GridPane.setVgrow(ganttBox, Priority.ALWAYS);
+
+        grid.add(ganttBox, 0, 10, 3, 1);
+
+
+        // ===================== TABLE =====================
+
+        processesTable.setMaxHeight(Double.MAX_VALUE);
+        processesTable.setMaxWidth(Double.MAX_VALUE);
+
+        GridPane.setHgrow(processesTable, Priority.ALWAYS);
+        GridPane.setVgrow(processesTable, Priority.ALWAYS);
 
         grid.add(processesTable, 0, 11, 3, 1);
-        processesTable.setPrefHeight(220);
-        processesTable.setMaxWidth(Double.MAX_VALUE);
-        GridPane.setHgrow(processesTable, Priority.ALWAYS);
 
-        GridPane.setHalignment(addProcess, HPos.CENTER);
-        GridPane.setHalignment(start, HPos.CENTER);
-        GridPane.setHalignment(clear, HPos.CENTER);
+
+        // ===================== METRICS =====================
+
+        metricsLabel.setStyle(
+            "-fx-font-size: 12px;" +
+            "-fx-font-weight: bold;" +
+            "-fx-padding: 10;"
+        );
+
+        metricsLabel.setWrapText(true);
+        metricsLabel.setMinHeight(40);
+        metricsLabel.setPrefHeight(60);
+        metricsLabel.setMaxWidth(Double.MAX_VALUE);
+
+        grid.add(metricsLabel, 0, 12, 3, 1);
+        GridPane.setHgrow(metricsLabel, Priority.ALWAYS);
+
+        
+
 
         Scene scene = new Scene(grid, 1100, 750);
 
