@@ -1,1 +1,18 @@
-/OS-Project/target/
+# Build & Maven output
+target/
+OS-Project/target/
+dependency-reduced-pom.xml
+# IDEs
+.idea/
+*.iml
+.vscode/
+*.ipr
+*.iws
+# IDE configs
+nbactions.xml
+nbproject/
+# Logs & Temp files
+*.log
+log/
+maven/
+maven.zip
