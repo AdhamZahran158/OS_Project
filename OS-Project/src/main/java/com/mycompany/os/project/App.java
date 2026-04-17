@@ -1066,7 +1066,22 @@ public class App extends Application {
                     for (process p : list) {
 
                         if (t < p.arrivalTime) {
-                            t = p.arrivalTime; // CPU idle handling
+
+                            int idleTime = p.arrivalTime - t;
+
+                            Region idle = new Region();
+                            idle.setPrefHeight(30);
+                            idle.setPrefWidth(idleTime * 25);
+                            idle.setStyle("-fx-background-color:#cccccc; -fx-border-color:black;");
+
+                            StackPane idleCell = new StackPane(idle, new Label("Idle"));
+                            ganttChart.getChildren().add(idleCell);
+
+                            Label idleLabel = new Label(String.valueOf(t));
+                            idleLabel.setMinWidth(idleTime * 25);
+                            timeAxis.getChildren().add(idleLabel);
+
+                            t = p.arrivalTime;
                         }
 
                         int start = t;
@@ -1081,8 +1096,6 @@ public class App extends Application {
 
                         Label timeLabel = new Label(String.valueOf(start));
                         timeLabel.setMinWidth(p.burst * 25);
-                        timeLabel.setPrefWidth(p.burst * 25);
-                        timeLabel.setStyle("-fx-font-size:10px;");
                         timeAxis.getChildren().add(timeLabel);
 
                         t += p.burst;
@@ -1101,8 +1114,9 @@ public class App extends Application {
                     timeAxis.getChildren().add(end);
 
                     metricsLabel.setText(
-                        "Average Waiting Time: " + (totalWT / (double) list.size()) +
-                        "\nAverage Turnaround Time: " + (totalTAT / (double) list.size())
+                        String.format("Average Waiting Time: %.2f\nAverage Turnaround Time: %.2f",
+                            totalWT / (double) list.size(),
+                            totalTAT / (double) list.size())
                     );
 
                     break;
@@ -1145,9 +1159,31 @@ public class App extends Application {
                             }
                         }
 
-                        // CPU idle
                         if (best == null) {
-                            t++;
+
+                            int nextArrival = Integer.MAX_VALUE;
+
+                            for (process p : list) {
+                                if (!done[list.indexOf(p)]) {
+                                    nextArrival = Math.min(nextArrival, p.arrivalTime);
+                                }
+                            }
+
+                            int idleTime = nextArrival - t;
+
+                            Region idle = new Region();
+                            idle.setPrefHeight(30);
+                            idle.setPrefWidth(idleTime * 25);
+                            idle.setStyle("-fx-background-color:#cccccc; -fx-border-color:black;");
+
+                            StackPane idleCell = new StackPane(idle, new Label("Idle"));
+                            ganttChart.getChildren().add(idleCell);
+
+                            Label idleLabel = new Label(String.valueOf(t));
+                            idleLabel.setMinWidth(idleTime * 25);
+                            timeAxis.getChildren().add(idleLabel);
+
+                            t = nextArrival;
                             continue;
                         }
 
@@ -1236,9 +1272,43 @@ public class App extends Application {
                             }
                         }
 
-                        // CPU idle
                         if (best == null) {
+
+                            if (last != null) {
+                                int duration = t - blockStart;
+
+                                Region block = new Region();
+                                block.setPrefHeight(30);
+                                block.setPrefWidth(duration * 25);
+                                block.setStyle("-fx-background-color:" + last.color + "; -fx-border-color:black;");
+
+                                StackPane cell = new StackPane(block, new Label(last.processName));
+                                ganttChart.getChildren().add(cell);
+
+                                Label timeLabel = new Label(String.valueOf(blockStart));
+                                timeLabel.setMinWidth(duration * 25);
+                                timeAxis.getChildren().add(timeLabel);
+
+                                last = null;
+                            }
+
+                            int idleStart = t;
+
                             t++;
+
+                            // build idle block dynamically
+                            Region idle = new Region();
+                            idle.setPrefHeight(30);
+                            idle.setPrefWidth(25);
+                            idle.setStyle("-fx-background-color:#cccccc; -fx-border-color:black;");
+
+                            StackPane idleCell = new StackPane(idle, new Label("Idle"));
+                            ganttChart.getChildren().add(idleCell);
+
+                            Label idleLabel = new Label(String.valueOf(idleStart));
+                            idleLabel.setMinWidth(25);
+                            timeAxis.getChildren().add(idleLabel);
+
                             continue;
                         }
 
@@ -1355,7 +1425,30 @@ public class App extends Application {
                         }
 
                         if (best == null) {
-                            t++;
+
+                            int nextArrival = Integer.MAX_VALUE;
+
+                            for (process p : list) {
+                                if (!done[list.indexOf(p)]) {
+                                    nextArrival = Math.min(nextArrival, p.arrivalTime);
+                                }
+                            }
+
+                            int idleTime = nextArrival - t;
+
+                            Region idle = new Region();
+                            idle.setPrefHeight(30);
+                            idle.setPrefWidth(idleTime * 25);
+                            idle.setStyle("-fx-background-color:#cccccc; -fx-border-color:black;");
+
+                            StackPane idleCell = new StackPane(idle, new Label("Idle"));
+                            ganttChart.getChildren().add(idleCell);
+
+                            Label idleLabel = new Label(String.valueOf(t));
+                            idleLabel.setMinWidth(idleTime * 25);
+                            timeAxis.getChildren().add(idleLabel);
+
+                            t = nextArrival;
                             continue;
                         }
 
@@ -1446,9 +1539,43 @@ public class App extends Application {
                             }
                         }
 
-                        // CPU idle
                         if (best == null) {
+
+                            if (last != null) {
+                                int duration = t - blockStart;
+
+                                Region block = new Region();
+                                block.setPrefHeight(30);
+                                block.setPrefWidth(duration * 25);
+                                block.setStyle("-fx-background-color:" + last.color + "; -fx-border-color:black;");
+
+                                StackPane cell = new StackPane(block, new Label(last.processName));
+                                ganttChart.getChildren().add(cell);
+
+                                Label timeLabel = new Label(String.valueOf(blockStart));
+                                timeLabel.setMinWidth(duration * 25);
+                                timeAxis.getChildren().add(timeLabel);
+
+                                last = null;
+                            }
+
+                            int idleStart = t;
+
                             t++;
+
+                            // build idle block dynamically
+                            Region idle = new Region();
+                            idle.setPrefHeight(30);
+                            idle.setPrefWidth(25);
+                            idle.setStyle("-fx-background-color:#cccccc; -fx-border-color:black;");
+
+                            StackPane idleCell = new StackPane(idle, new Label("Idle"));
+                            ganttChart.getChildren().add(idleCell);
+
+                            Label idleLabel = new Label(String.valueOf(idleStart));
+                            idleLabel.setMinWidth(25);
+                            timeAxis.getChildren().add(idleLabel);
+
                             continue;
                         }
 
@@ -1562,7 +1689,28 @@ public class App extends Application {
                         }
 
                         if (q.isEmpty()) {
-                            t++;
+
+                            int nextArrival = Integer.MAX_VALUE;
+
+                            for (int j = i; j < list.size(); j++) {
+                                nextArrival = Math.min(nextArrival, list.get(j).arrivalTime);
+                            }
+
+                            int idleTime = nextArrival - t;
+
+                            Region idle = new Region();
+                            idle.setPrefHeight(30);
+                            idle.setPrefWidth(idleTime * 25);
+                            idle.setStyle("-fx-background-color:#cccccc; -fx-border-color:black;");
+
+                            StackPane idleCell = new StackPane(idle, new Label("Idle"));
+                            ganttChart.getChildren().add(idleCell);
+
+                            Label idleLabel = new Label(String.valueOf(t));
+                            idleLabel.setMinWidth(idleTime * 25);
+                            timeAxis.getChildren().add(idleLabel);
+
+                            t = nextArrival;
                             continue;
                         }
 
