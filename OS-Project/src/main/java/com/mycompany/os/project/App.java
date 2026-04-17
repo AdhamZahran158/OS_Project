@@ -241,7 +241,25 @@ public class App extends Application {
                             }
 
                             if (p == null) {
-                                try { Thread.sleep(1000); } catch (InterruptedException ex) {}
+
+                                int startTime = currentTime[0];
+
+                                Platform.runLater(() -> {
+                                    Region block = new Region();
+                                    block.setPrefHeight(30);
+                                    block.setPrefWidth(25);
+                                    block.setStyle("-fx-background-color: #cccccc; -fx-border-color: black;");
+
+                                    StackPane cell = new StackPane(block, new Label("Idle"));
+                                    ganttChart.getChildren().add(cell);
+
+                                    Label timeLabel = new Label(String.valueOf(startTime));
+                                    timeLabel.setMinWidth(25);
+                                    timeAxis.getChildren().add(timeLabel);
+                                });
+
+                                try { Thread.sleep(1000); } catch (Exception e) {}
+
                                 currentTime[0]++;
                                 refreshTimerLabel.run();
                                 continue;
@@ -363,7 +381,24 @@ public class App extends Application {
                             }
 
                             if (best == null) {
+                                int startTime = currentTime[0];
+
+                                Platform.runLater(() -> {
+                                    Region block = new Region();
+                                    block.setPrefHeight(30);
+                                    block.setPrefWidth(25);
+                                    block.setStyle("-fx-background-color: #cccccc; -fx-border-color: black;");
+
+                                    StackPane cell = new StackPane(block, new Label("Idle"));
+                                    ganttChart.getChildren().add(cell);
+
+                                    Label timeLabel = new Label(String.valueOf(startTime));
+                                    timeLabel.setMinWidth(25);
+                                    timeAxis.getChildren().add(timeLabel);
+                                });
+
                                 try { Thread.sleep(1000); } catch (Exception e) {}
+
                                 currentTime[0]++;
                                 refreshTimerLabel.run();
                                 continue;
@@ -429,7 +464,7 @@ public class App extends Application {
                     break;
                 }
                 
-                case "SJF [Preemptive]": 
+                case "SJF [Preemptive]":    
                 {
                     timeline.play();
                     new Thread(() -> {
@@ -475,7 +510,24 @@ public class App extends Application {
                             }
 
                             if (best == null) {
+                                int startTime = currentTime[0];
+
+                                Platform.runLater(() -> {
+                                    Region block = new Region();
+                                    block.setPrefHeight(30);
+                                    block.setPrefWidth(25);
+                                    block.setStyle("-fx-background-color: #cccccc; -fx-border-color: black;");
+
+                                    StackPane cell = new StackPane(block, new Label("Idle"));
+                                    ganttChart.getChildren().add(cell);
+
+                                    Label timeLabel = new Label(String.valueOf(startTime));
+                                    timeLabel.setMinWidth(25);
+                                    timeAxis.getChildren().add(timeLabel);
+                                });
+
                                 try { Thread.sleep(1000); } catch (Exception e) {}
+
                                 currentTime[0]++;
                                 refreshTimerLabel.run();
                                 continue;
@@ -559,7 +611,24 @@ public class App extends Application {
                             }
 
                             if (best == null) {
+                                int startTime = currentTime[0];
+
+                                Platform.runLater(() -> {
+                                    Region block = new Region();
+                                    block.setPrefHeight(30);
+                                    block.setPrefWidth(25);
+                                    block.setStyle("-fx-background-color: #cccccc; -fx-border-color: black;");
+
+                                    StackPane cell = new StackPane(block, new Label("Idle"));
+                                    ganttChart.getChildren().add(cell);
+
+                                    Label timeLabel = new Label(String.valueOf(startTime));
+                                    timeLabel.setMinWidth(25);
+                                    timeAxis.getChildren().add(timeLabel);
+                                });
+
                                 try { Thread.sleep(1000); } catch (Exception e) {}
+
                                 currentTime[0]++;
                                 refreshTimerLabel.run();
                                 continue;
@@ -713,7 +782,24 @@ public class App extends Application {
                             }
 
                             if (best == null) {
+                                int startTime = currentTime[0];
+
+                                Platform.runLater(() -> {
+                                    Region block = new Region();
+                                    block.setPrefHeight(30);
+                                    block.setPrefWidth(25);
+                                    block.setStyle("-fx-background-color: #cccccc; -fx-border-color: black;");
+
+                                    StackPane cell = new StackPane(block, new Label("Idle"));
+                                    ganttChart.getChildren().add(cell);
+
+                                    Label timeLabel = new Label(String.valueOf(startTime));
+                                    timeLabel.setMinWidth(25);
+                                    timeAxis.getChildren().add(timeLabel);
+                                });
+
                                 try { Thread.sleep(1000); } catch (Exception e) {}
+
                                 currentTime[0]++;
                                 refreshTimerLabel.run();
                                 continue;
@@ -819,7 +905,24 @@ public class App extends Application {
                                     break;
                                 }
 
-                                try { Thread.sleep(1000); } catch (InterruptedException ex) { ex.printStackTrace(); }
+                                int startTime = currentTime[0];
+
+                                Platform.runLater(() -> {
+                                    Region block = new Region();
+                                    block.setPrefHeight(30);
+                                    block.setPrefWidth(25);
+                                    block.setStyle("-fx-background-color: #cccccc; -fx-border-color: black;");
+
+                                    StackPane cell = new StackPane(block, new Label("Idle"));
+                                    ganttChart.getChildren().add(cell);
+
+                                    Label timeLabel = new Label(String.valueOf(startTime));
+                                    timeLabel.setMinWidth(25);
+                                    timeAxis.getChildren().add(timeLabel);
+                                });
+
+                                try { Thread.sleep(1000); } catch (Exception e) {}
+
                                 currentTime[0]++;
                                 refreshTimerLabel.run();
                                 continue;
@@ -901,6 +1004,41 @@ public class App extends Application {
                 default:
                 {
                     timeline.play();
+
+                    new Thread(() -> {
+                        while (true) {
+
+                            while (isPaused) {
+                                try { Thread.sleep(100); } catch (Exception e) {}
+                            }
+
+                            int startTime = currentTime[0];
+
+                            Platform.runLater(() -> {
+                                Region block = new Region();
+                                block.setPrefHeight(30);
+                                block.setPrefWidth(25);
+                                block.setStyle("-fx-background-color: #cccccc; -fx-border-color: black;");
+
+                                StackPane cell = new StackPane(block, new Label("Idle"));
+                                ganttChart.getChildren().add(cell);
+
+                                Label timeLabel = new Label(String.valueOf(startTime));
+                                timeLabel.setMinWidth(25);
+                                timeAxis.getChildren().add(timeLabel);
+                            });
+
+                            try { Thread.sleep(1000); } catch (Exception e) {}
+
+                            currentTime[0]++;
+                            refreshTimerLabel.run();
+
+                            // stop if user stops dynamic execution
+                            if (!dynamicSimulationStarted) break;
+                        }
+                    }).start();
+
+                    break;
                 }
             }
         });
