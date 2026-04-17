@@ -1,6 +1,5 @@
 package com.mycompany.os.project;
 
-import com.mycompany.os.project.src.Timeline;
 import com.mycompany.os.project.src.process;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -68,18 +67,12 @@ public class App extends Application {
         burstOfProcess.setValueFactory(
                 new SpinnerValueFactory.IntegerSpinnerValueFactory(1,1000,1)
         );
-
-        var arrivalTimeLabel = new Label("Choose Arrival Time");
-        Spinner<Integer> arrivalTime = new Spinner<>();
-        arrivalTime.setValueFactory(
-                new SpinnerValueFactory.IntegerSpinnerValueFactory(0,1000,0)
-        );
-
+        
         var priorityLabel = new Label("Choose Priority Of Process");
         priorityLabel.setDisable(true);
         Spinner<Integer> priority = new Spinner<>();
         priority.setValueFactory(
-        new SpinnerValueFactory.IntegerSpinnerValueFactory(1,1000,1)
+        new SpinnerValueFactory.IntegerSpinnerValueFactory(0,1000)
         );
         priority.setDisable(true);
         
@@ -595,77 +588,291 @@ public class App extends Application {
                     }).start();
                     break;
                 }
-                case "Priority [Non-Preemptive]": {
-                    Timeline timeline = new Timeline();
-                    int time = 0;
-                    int completed = 0;
+                
+                case "Priority [Non-Preemptive]":
+                {
+                    timeline.play();
 
-                    while (completed < processes.size()) {
-                        ArrayList<process> available = new ArrayList<>();
-                        for (process p : processes) {
-                            if (p.arrivaltime <= time && !p.finished) {
-                                available.add(p);
+                    new Thread(() -> {
+                        int totalWT = 0;
+                        int totalTAT = 0;
+                        int count = 0;
+                        double initSize = ((double)processes.size());
+
+                        while (true) {
+
+                            while (isPaused) {
+                                try { Thread.sleep(100); } catch (Exception e) {}
+                            }
+
+                            process best = null;
+                            synchronized (processListLock) {
+                                if (processes.isEmpty() && !dynamicSimulationStarted) {
+                                    break;
+                                }
+
+                                for (process candidate : processes) {
+                                    if (candidate.arrivalTime <= currentTime[0]) {
+                                        if (best == null || candidate.priority < best.priority) {
+                                            best = candidate;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (best == null) {
+                                int startTime = currentTime[0];
+
+                                Platform.runLater(() -> {
+                                    Region block = new Region();
+                                    block.setPrefHeight(30);
+                                    block.setPrefWidth(25);
+                                    block.setStyle("-fx-background-color: #cccccc; -fx-border-color: black;");
+
+                                    StackPane cell = new StackPane(block, new Label("Idle"));
+                                    ganttChart.getChildren().add(cell);
+
+                                    Label timeLabel = new Label(String.valueOf(startTime));
+                                    timeLabel.setMinWidth(25);
+                                    timeAxis.getChildren().add(timeLabel);
+                                });
+
+                                try { Thread.sleep(1000); } catch (Exception e) {}
+
+                                currentTime[0]++;
+                                refreshTimerLabel.run();
+                                continue;
+                            }
+
+                            var p = best;
+
+                            Platform.runLater(() -> {
+                                execLabel.setText("Executing " + p.processName + " ...");
+                            });
+
+                            final double progress = (initSize - ((double)processes.size()) + 1) / initSize;
+                            Platform.runLater(() -> {
+                                bar.setProgress(initSize <= 0 ? 0 : progress);
+                            });
+
+                            try {
+                                while (p.burst != 0) {
+                                    while (isPaused) {
+                                        try { Thread.sleep(100); } catch (Exception e) {}
+                                    }
+
+                                    int tickStart = currentTime[0];
+                                    Platform.runLater(() -> {
+                                        Region block = new Region();
+                                        block.setPrefHeight(30);
+                                        block.setPrefWidth(25);
+                                        block.setStyle(
+                                            "-fx-background-color: " + p.color + ";" +
+                                            "-fx-border-color: black;" +
+                                            "-fx-background-radius: 5;"
+                                        );
+
+                                        Label label = new Label(p.processName);
+                                        label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+
+                                        StackPane cell = new StackPane();
+                                        cell.getChildren().addAll(block, label);
+                                        ganttChart.getChildren().add(cell);
+
+                                        Label timeLabel = new Label(String.valueOf(tickStart));
+                                        timeLabel.setMinWidth(25);
+                                        timeLabel.setStyle("-fx-font-size: 10px;");
+                                        timeAxis.getChildren().add(timeLabel);
+                                    });
+
+                                    Thread.sleep(1000);
+                                    p.burst--;
+                                    currentTime[0]++;
+                                    refreshTimerLabel.run();
+                                    Platform.runLater(processesTable::refresh);
+                                }
+                            } catch (InterruptedException ex) {
+                                ex.printStackTrace();
+                            }
+
+                            p.finishTime = currentTime[0];
+
+                            int wt = p.getWaitingTime();
+                            int tat = p.getTurnaroundTime();
+
+                            totalWT += wt;
+                            totalTAT += tat;
+                            count++;
+
+                            synchronized (processListLock) {
+                                processes.remove(p);
                             }
                         }
 
-                        if (available.isEmpty()) {
-                            timeline.addSlot("IDLE", time, time + 1);
-                            time++;
-                            continue;
-                        }
+                        final double avgWT = count == 0 ? 0 : totalWT / (double) count;
+                        final double avgTAT = count == 0 ? 0 : totalTAT / (double) count;
 
-                        available.sort((p1, p2) -> Integer.compare(p1.priority, p2.priority));
+                        Platform.runLater(() -> {
+                            execLabel.setText("Done!");
+                            metricsLabel.setText(
+                                "Average Waiting Time: " + avgWT +
+                                "\nAverage Turnaround Time: " + avgTAT
+                            );
 
-                        process current = available.get(0);
-                        current.finishtime = time + current.burst;
-                        timeline.addSlot(current.processName, time, current.finishtime);
-                        time = current.finishtime;
-                        current.finished = true;
-                        completed++;
-                    }
+                            Label end = new Label(String.valueOf(currentTime[0]));
+                            timeAxis.getChildren().add(end);
+                        });
+
+                        seconds[0] = 0;
+                        timeline.stop();
+                    }).start();
+
                     break;
                 }
                 
                 case "Priority [Preemptive]":
                 {
-                    Timeline timeline = new Timeline();
-                    int time = 0;
-                    int completed = 0;
+                    timeline.play();
 
-                    int[] remaining = new int[processes.size()];
-                    for (int i = 0; i < processes.size(); i++) {
-                        remaining[i] = processes.get(i).burst;
-                    }
+                    new Thread(() -> {
+                        HashMap<process, Integer> remaining = new HashMap<>();
 
-                    while (completed < processes.size()) {
-                        ArrayList<process> available = new ArrayList<>();
-                        for (process p : processes) {
-                            if (p.arrivaltime <= time && !p.finished) {
-                                available.add(p);
+                        int totalWT = 0;
+                        int totalTAT = 0;
+                        int count = 0;
+
+                        while (true) {
+
+                            while (isPaused) {
+                                try { Thread.sleep(100); } catch (Exception e) {}
                             }
+
+                            synchronized (processListLock) {
+                                for (process p : processes) {
+                                    remaining.putIfAbsent(p, p.burst);
+                                }
+                            }
+
+                            boolean noProcessesLeft;
+                            synchronized (processListLock) {
+                                noProcessesLeft = processes.isEmpty();
+                            }
+
+                            if (noProcessesLeft && !dynamicSimulationStarted) {
+                                final double avgWT = count == 0 ? 0 : totalWT / (double) count;
+                                final double avgTAT = count == 0 ? 0 : totalTAT / (double) count;
+
+                                Platform.runLater(() -> {
+                                    execLabel.setText("Done!");
+                                    metricsLabel.setText(
+                                        "Average Waiting Time: " + avgWT +
+                                        "\nAverage Turnaround Time: " + avgTAT
+                                    );
+
+                                    Label end = new Label(String.valueOf(currentTime[0]));
+                                    timeAxis.getChildren().add(end);
+                                });
+
+                                seconds[0] = 0;
+                                timeline.stop();
+                                break;
+                            }
+
+                            process best = null;
+                            int bestPriority = Integer.MAX_VALUE;
+
+                            synchronized (processListLock) {
+                                for (process candidate : processes) {
+                                    if (candidate.arrivalTime <= currentTime[0] && candidate.priority < bestPriority) {
+                                        bestPriority = candidate.priority;
+                                        best = candidate;
+                                    }
+                                }
+                            }
+
+                            if (best == null) {
+                                int startTime = currentTime[0];
+
+                                Platform.runLater(() -> {
+                                    Region block = new Region();
+                                    block.setPrefHeight(30);
+                                    block.setPrefWidth(25);
+                                    block.setStyle("-fx-background-color: #cccccc; -fx-border-color: black;");
+
+                                    StackPane cell = new StackPane(block, new Label("Idle"));
+                                    ganttChart.getChildren().add(cell);
+
+                                    Label timeLabel = new Label(String.valueOf(startTime));
+                                    timeLabel.setMinWidth(25);
+                                    timeAxis.getChildren().add(timeLabel);
+                                });
+
+                                try { Thread.sleep(1000); } catch (Exception e) {}
+
+                                currentTime[0]++;
+                                refreshTimerLabel.run();
+                                continue;
+                            }
+
+                            process p = best;
+
+                            Platform.runLater(() -> {
+                                execLabel.setText("Executing " + p.processName + " ...");
+                            });
+
+                            int startTime = currentTime[0];
+
+                            Platform.runLater(() -> {
+                                Region block = new Region();
+                                block.setPrefHeight(30);
+                                block.setPrefWidth(25);
+                                block.setStyle(
+                                    "-fx-background-color: " + p.color + ";" +
+                                    "-fx-border-color: black;"
+                                );
+
+                                Label label = new Label(p.processName);
+                                label.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+
+                                StackPane cell = new StackPane();
+                                cell.getChildren().addAll(block, label);
+
+                                ganttChart.getChildren().add(cell);
+
+                                Label timeLabel = new Label(String.valueOf(startTime));
+                                timeLabel.setMinWidth(25);
+                                timeAxis.getChildren().add(timeLabel);
+                            });
+
+                            remaining.put(p, remaining.get(p) - 1);
+                            p.burst--;
+                            currentTime[0]++;
+                            refreshTimerLabel.run();
+
+                            try { Thread.sleep(1000); } catch (Exception e) {}
+
+                            if (remaining.get(p) == 0) {
+
+                                p.finishTime = currentTime[0];
+
+                                int wt = p.getWaitingTime();
+                                int tat = p.getTurnaroundTime();
+
+                                totalWT += wt;
+                                totalTAT += tat;
+                                count++;
+
+                                synchronized (processListLock) {
+                                    processes.remove(p);
+                                    remaining.remove(p);
+                                }
+                            }
+
+                            Platform.runLater(() -> processesTable.refresh());
                         }
 
-                        if (available.isEmpty()) {
-                            timeline.addSlot("IDLE", time, time + 1);
-                            time++;
-                            continue;
-                        }
+                    }).start();
 
-                        available.sort((p1, p2) -> Integer.compare(p1.priority, p2.priority));
-
-                        process current = available.get(0);
-                        int currentIndex = processes.indexOf(current);
-                        timeline.addSlot(current.processName, time, time + 1);
-                        remaining[currentIndex]--;
-                        time++;
-
-                        if (remaining[currentIndex] == 0) {
-                            current.finishtime = time;
-                            current.finished = true;
-                            completed++;
-                        }
-                    }
-                    timeline.mergeConsecutive();
                     break;
                 }
                 
